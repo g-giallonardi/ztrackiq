@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Users, Car, Trophy, Flag, Wrench } from "lucide-react";
+import Image from "next/image";
+import { Car, Flag, Trophy, Users, Wrench } from "lucide-react";
 import { requireCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -14,8 +15,19 @@ type AuditPayload = {
   nickname?: unknown;
 };
 
+type RaceSummaryRow = {
+  totalResults: number | bigint | null;
+  totalLaps: number | bigint | null;
+  averageLaps: number | null;
+  bestLapMs: number | null;
+};
+
 function readCount(rows: CountRow[]) {
   return Number(rows[0]?.count ?? 0);
+}
+
+function readMetric(value: number | bigint | null | undefined) {
+  return Number(value ?? 0);
 }
 
 function asAuditPayload(value: unknown) {
@@ -49,32 +61,32 @@ function getActivityConfig(entity: string, action: string) {
     Pilot: {
       label: "Pilote",
       color: "bg-pink-500",
-      icon: <Users size={22} />,
+      icon: <Users size={16} />,
     },
     Car: {
       label: "Voiture",
-      color: "bg-cyan-400",
-      icon: <Car size={22} />,
+      color: "bg-cyan-500",
+      icon: <Car size={16} />,
     },
     Race: {
       label: "Course",
-      color: "bg-yellow-300",
-      icon: <Flag size={22} />,
+      color: "bg-yellow-400",
+      icon: <Flag size={16} />,
     },
     Championship: {
       label: "Championnat",
       color: "bg-purple-600",
-      icon: <Trophy size={22} />,
+      icon: <Trophy size={16} />,
     },
     Spec: {
       label: "Pièce",
       color: "bg-zinc-700",
-      icon: <Wrench size={22} />,
+      icon: <Wrench size={16} />,
     },
   }[entity] ?? {
     label: entity,
     color: "bg-zinc-700",
-    icon: <Wrench size={22} />,
+    icon: <Wrench size={16} />,
   };
 
   const actionLabel = {
@@ -154,16 +166,33 @@ export default async function HomePage() {
   const now = new Date();
   const startOfYear = new Date(now.getFullYear(), 0, 1);
   const startOfNextYear = new Date(now.getFullYear() + 1, 0, 1);
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
   const [
     activePilots,
+    inactivePilots,
     registeredCars,
+    carChipsRows,
+    trackCount,
+    specCount,
     seasonRacesRows,
+    monthRacesRows,
+    upcomingRacesRows,
     openChampionshipsRows,
+    raceSummaryRows,
     recentActivities,
   ] = await Promise.all([
     prisma.pilot.count({ where: { active: true } }),
+    prisma.pilot.count({ where: { active: false } }),
     prisma.car.count(),
+    prisma.$queryRaw<CountRow[]>`
+      SELECT COUNT(*)::int AS count
+      FROM "Car"
+      WHERE "chipId" IS NOT NULL
+    `,
+    prisma.track.count(),
+    prisma.spec.count(),
     prisma.$queryRaw<CountRow[]>`
       SELECT COUNT(*)::int AS count
       FROM "Race"
@@ -172,9 +201,28 @@ export default async function HomePage() {
     `,
     prisma.$queryRaw<CountRow[]>`
       SELECT COUNT(*)::int AS count
+      FROM "Race"
+      WHERE "raceDate" >= ${startOfMonth}
+        AND "raceDate" < ${startOfNextMonth}
+    `,
+    prisma.$queryRaw<CountRow[]>`
+      SELECT COUNT(*)::int AS count
+      FROM "Race"
+      WHERE "raceDate" >= ${now}
+    `,
+    prisma.$queryRaw<CountRow[]>`
+      SELECT COUNT(*)::int AS count
       FROM "Championship"
       WHERE "startDate" <= ${now}
         AND ("endDate" IS NULL OR "endDate" >= ${now})
+    `,
+    prisma.$queryRaw<RaceSummaryRow[]>`
+      SELECT
+        COUNT(*)::int AS "totalResults",
+        COALESCE(SUM("laps"), 0)::int AS "totalLaps",
+        AVG("laps")::float AS "averageLaps",
+        MIN("bestLapMs")::int AS "bestLapMs"
+      FROM "RaceResult"
     `,
     prisma.auditLog.findMany({
       orderBy: { createdAt: "desc" },
@@ -183,88 +231,120 @@ export default async function HomePage() {
   ]);
 
   const seasonRaces = readCount(seasonRacesRows);
+  const monthRaces = readCount(monthRacesRows);
+  const upcomingRaces = readCount(upcomingRacesRows);
   const openChampionships = readCount(openChampionshipsRows);
+  const carChips = readCount(carChipsRows);
+  const raceSummary = raceSummaryRows[0];
+  const totalLaps = readMetric(raceSummary?.totalLaps);
+  const averageLaps = Math.floor(raceSummary?.averageLaps ?? 0);
 
   return (
-    <div>
-      <section className="relative overflow-hidden shadow-2xl h-[450px]">
-
-        {/* Image */}
-        <img
+    <div className="min-h-screen bg-zinc-50 text-zinc-900">
+      <section className="relative overflow-hidden bg-zinc-100">
+        <Image
           src="/images/banner.png"
-          alt="Banner"
-          className="absolute inset-0 h-full w-full object-cover"
+          alt=""
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover"
         />
-
-
-        {/* Contenu */}
-        <div className="relative z-10 flex h-full items-center p-10">
-          <div className="max-w-3xl h-full flex flex-col-reverse justify-items-end">
-
-            <div className="mt-8 flex gap-4">
-              <Link
-                href="/pilots"
-                className="rounded-xl bg-pink-500 px-6 py-3 font-black uppercase transition hover:scale-105"
-              >
-                Gérer les pilotes
-              </Link>
-
-              <Link
-                href="/races"
-                className="rounded-xl bg-yellow-300 px-6 py-3 font-black uppercase text-black transition hover:scale-105"
-              >
-                Nouvelle course
-              </Link>
-            </div>
+        <div className="relative flex min-h-56 flex-col justify-end gap-4 p-4 md:min-h-72 md:p-6">
+          <div className="flex flex-wrap justify-end gap-2">
+            <QuickAction href="/races" icon={<Flag size="17" />} label="Courses" />
+            <QuickAction href="/me" icon={<Users size="17" />} label="Mon profil" />
+            {canManage && (
+              <QuickAction
+                href="/races?drawer=add"
+                icon={<Trophy size="17" />}
+                label="Nouvelle course"
+              />
+            )}
           </div>
         </div>
-
       </section>
 
-      <div className="grid lg:grid-cols-[2fr_1fr] gap-3">
-        <div className="bg-white pt-2 px-2 rounded-2xl h-full">
-          <section className="grid gap-1 md:grid-cols-4 ">
-          <StatCard label="Pilotes" sublabel='actifs' value={activePilots.toString()} color="bg-pink-500" icon={<Users size={70} />} />
-          <StatCard label="Voitures" sublabel='enregistrées' value={registeredCars.toString()} color="bg-cyan-400"  icon={<Car size={70} />} />
-          <StatCard label="Courses" sublabel='cette saison' value={seasonRaces.toString()} color="bg-yellow-300" dark  icon={<Flag size={70} />} />
-          <StatCard label="Championnats" sublabel='en cours' value={openChampionships.toString()} color="bg-purple-600"  icon={<Trophy size={70} />} />
+      <div className="p-4">
+        <div className="mb-4">
+          <p className="text-xs font-black uppercase tracking-wide text-pink-500">
+            ZTrackIQ
+          </p>
+          <h1 className="mt-1 text-2xl font-black md:text-3xl">
+            Tableau de bord
+          </h1>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
+          <section className="rounded-md border border-zinc-200 bg-white">
+            <div className="border-b border-zinc-100 px-4 py-3">
+              <h2 className="text-sm font-black uppercase tracking-wide text-zinc-700">
+                Accès rapides
+              </h2>
+            </div>
+            <div className="grid divide-y divide-zinc-100 md:grid-cols-2 md:divide-x md:divide-y-0">
+              <QuickLink
+                href="/pilots"
+                icon={<Users size="19" />}
+                title="Pilotes"
+                detail="Listing et fiches pilotes"
+              />
+              <QuickLink
+                href="/cars"
+                icon={<Car size="19" />}
+                title="Voitures"
+                detail="Garage Mini-Z"
+              />
+              <QuickLink
+                href="/races"
+                icon={<Flag size="19" />}
+                title="Courses"
+                detail="Sessions et résultats"
+              />
+              <QuickLink
+                href="/championships"
+                icon={<Trophy size="19" />}
+                title="Championnats"
+                detail="Classements et podiums"
+              />
+            </div>
           </section>
 
-          <div className="uppercase text-black text-xl font-black mt-3">
-              Accès rapide
-          </div>
-
-          <section className="grid gap-6 lg:grid-cols-4">
-            <QuickCard
-              href="/pilots"
-              title="Pilotes"
-              subtitle="Gérer les pilotes"
-              img="/images/helmet.png"
-            />
-            <QuickCard
-              href="/cars"
-              title="Voitures"
-              subtitle="Gérer les voitures"
-              img="/images/car.png"
-            />
-            <QuickCard
-              href="/races"
-              title="Courses"
-              subtitle="Gérer/Créer"
-              img="/images/track.png"
-            />
-            <QuickCard
-              href="/races"
-              title="Championnat"
-              subtitle="Voir les championats"
-              img="/images/trophy.png"
-            />
+          <section className="rounded-md border border-zinc-200 bg-zinc-50 p-4">
+            <h2 className="text-sm font-black uppercase tracking-wide text-zinc-700">
+              Résumé
+            </h2>
+            <div className="mt-3 space-y-2 text-sm text-zinc-600">
+              <StatusLine
+                label="Pilotes"
+                value={`${activePilots} actifs · ${inactivePilots} inactifs`}
+              />
+              <StatusLine
+                label="Courses"
+                value={`${monthRaces} ce mois · ${upcomingRaces} à venir`}
+              />
+              <StatusLine label="Saison" value={`${seasonRaces} course${seasonRaces > 1 ? "s" : ""}`} />
+              <StatusLine
+                label="Championnat"
+                value={openChampionships > 0 ? `${openChampionships} ouvert${openChampionships > 1 ? "s" : ""}` : "Aucun ouvert"}
+              />
+              <StatusLine label="Garage" value={`${registeredCars} Mini-Z · ${carChips} puces`} />
+              <StatusLine label="Technique" value={`${trackCount} circuits · ${specCount} pièces`} />
+              <StatusLine label="Rythme" value={`${totalLaps} tours · moy. ${averageLaps}`} />
+            </div>
           </section>
+        </div>
 
-          <div className="uppercase text-black text-xl font-black mt-3">
+        <section className="mt-4 rounded-md border border-zinc-200 bg-white">
+          <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3">
+            <h2 className="text-sm font-black uppercase tracking-wide text-zinc-700">
               Activités récentes
+            </h2>
+            <span className="text-xs font-medium text-zinc-400">
+              {recentActivities.length} entrée{recentActivities.length > 1 ? "s" : ""}
+            </span>
           </div>
-          <div className="space-y-2">
+          <div className="divide-y divide-zinc-100">
             {recentActivities.length > 0 ? (
               recentActivities.map((activity) => {
                 const config = getActivityConfig(activity.entity, activity.action);
@@ -288,91 +368,67 @@ export default async function HomePage() {
                 );
               })
             ) : (
-              <div className="rounded-2xl border border-zinc-200 bg-white p-3 text-sm font-medium text-zinc-500 shadow-xl">
-                Aucune activité récente
+              <div className="p-4 text-sm text-zinc-500">
+                Aucune activité récente.
               </div>
             )}
           </div>
-        </div>
-
-        <div className="bg-white px-4 px-2 rounded-2xl my-auto">
-          <div className="uppercase text-black text-xl font-black mt-3">
-              Prochain événement
-          </div>
-          <div className="flex justify-items-center flex-col mt-3">
-            <div className="justify-items-center">
-              <img src="/images/next-event.png" className="max-h-50 w-auto" />
-            </div>
-            <div className="px-6 mb-6">
-              <h3 className="text-black font-black uppercase text-2xl italic">Endurance 2K26</h3>
-              <p className="text-gray-700">Salle des fêtes de Combon</p>
-              <p className="text-gray-700">11 Octobre 2026 - 14:00</p>
-            </div>
-            <button className="block mx-auto bg-pink-500 rounded-md px-4 py-2">
-              Voir
-            </button>
-          </div>
-        </div>
+        </section>
       </div>
     </div>
   );
 }
 
-function StatCard({
-  label,
-  sublabel,
-  value,
-  color,
-  icon,
-  dark = false,
-}: {
-  label: string;
-  sublabel: string;
-  value: string;
-  color: string;
-  icon: React.ReactNode;
-  dark?: boolean;
-}) {
-  return (
-    <div
-      className={`${color} flex flex-row justify-items-center rounded-2xl p-3 shadow-xl ${
-        dark ? "text-zinc-950" : "text-white"
-      }`}
-    >
-      <div className="flex items-center">
-        {icon}
-      </div>
-      <div className="flex flex-col mx-4">
-        <div className="text-3xl font-black italic">{value}</div>
-        <div className="mt-2 font-black uppercase text-sm">{label}</div>
-        <div className="mt-2 uppercase font-extralight text-xs">{sublabel}</div>
-      </div>
-    </div>
-  );
-}
-
-function QuickCard({
+function QuickAction({
   href,
-  title,
-  subtitle,
-  img,
+  icon,
+  label,
 }: {
   href: string;
-  title: string;
-  subtitle: string;
-  img: string;
+  icon: React.ReactNode;
+  label: string;
 }) {
   return (
     <Link
       href={href}
-      className="group rounded-2xl border border-zinc-200 bg-white text-zinc-950 shadow-xl transition hover:-translate-y-1 hover:border-pink-500 overflow-hidden" 
+      className="inline-flex items-center gap-2 rounded-md border border-white/70 bg-white/85 px-3 py-2 text-sm font-semibold text-zinc-900 backdrop-blur transition hover:border-pink-300 hover:text-pink-600"
     >
-      <img src={img}/>
-      <div className="px-3 mb-2">
-        <h2 className="mt-6 text-2xl font-black italic uppercase">{title}</h2>
-        <p className="mt-2 text-sm font-medium text-zinc-500 uppercase">{subtitle}</p>
+      {icon}
+      {label}
+    </Link>
+  );
+}
+
+function QuickLink({
+  href,
+  icon,
+  title,
+  detail,
+}: {
+  href: string;
+  icon: React.ReactNode;
+  title: string;
+  detail: string;
+}) {
+  return (
+    <Link href={href} className="flex items-center gap-3 p-4 transition hover:bg-zinc-50">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-zinc-700">
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <p className="font-black text-zinc-900">{title}</p>
+        <p className="text-sm text-zinc-500">{detail}</p>
       </div>
     </Link>
+  );
+}
+
+function StatusLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-md bg-white px-3 py-2">
+      <span>{label}</span>
+      <span className="font-semibold text-zinc-900">{value}</span>
+    </div>
   );
 }
 
@@ -389,18 +445,21 @@ function LastActivityCard({
   value: string;
   date: string;
   link: string;
-  color: string
+  color: string;
 }) {
   return (
-    <Link
-      href={link}
-      className="group rounded-2xl border border-zinc-200 bg-white text-zinc-950 shadow-xl transition hover:-translate-y-1 hover:border-pink-500 overflow-hidden" 
-    >
-      <div className="flex flex-row justify-items-center gap-2">
-        <div className={`${color} p-1`}>{icon}</div>
-        <p className="font-black self-center">{activity}</p> 
-        <p className="self-center">{value}</p>
-        <p className="font-black self-center">{date}</p>
+    <Link href={link} className="block px-4 py-3 transition hover:bg-zinc-50">
+      <div className="flex items-center gap-3">
+        <div className={`${color} flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white`}>
+          {icon}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-zinc-900">
+            {activity}
+            <span className="font-normal text-zinc-500"> · {value}</span>
+          </p>
+        </div>
+        <p className="shrink-0 text-xs font-semibold text-zinc-400">{date}</p>
       </div>
     </Link>
   );
