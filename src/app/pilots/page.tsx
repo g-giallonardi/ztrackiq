@@ -177,9 +177,9 @@ export default async function PilotsPage({
 
   return (
     <div className="bg-white m-2 p-2 rounded text-gray-900">
-        <div className="flex flex-row items-start justify-between gap-4">
+        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
             <div>
-                <div className="text-5xl flex flex-row gap-2 my-2">
+                <div className="flex flex-row gap-2 text-4xl sm:text-5xl my-2">
                     <p className="text-pink-500 bg-pink-200 p-2 rounded"><Users size="30"/></p> 
                     <p className="self-end ">Pilotes</p>
                 </div>
@@ -189,8 +189,8 @@ export default async function PilotsPage({
               <Link
                   href="/pilots?drawer=add"
                   className="
-                    inline-flex items-center gap-2
-                    h-fit shrink-0
+                    inline-flex items-center justify-center gap-2
+                    h-fit w-full shrink-0 sm:w-auto
                     rounded-md
                     bg-gradient-to-r from-pink-500 to-yellow-400
                     px-5 py-3
