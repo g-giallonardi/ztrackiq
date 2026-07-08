@@ -1,0 +1,48 @@
+model Race {
+  id             Int           @id @default(autoincrement())
+  name           String
+  raceDate       DateTime
+  trackId        Int?
+  track          Track?        @relation(fields: [trackId], references: [id], onDelete: SetNull)
+  championshipId Int?
+  championship   Championship? @relation(fields: [championshipId], references: [id], onDelete: SetNull)
+  location       String?
+  notes          String?
+  results        RaceResult[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([raceDate])
+  @@index([trackId])
+  @@index([championshipId])
+}
+
+model Track {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  races     Race[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+}
+
+model RaceResult {
+  id        Int      @id @default(autoincrement())
+  raceId    Int
+  pilotId   Int
+  carId     Int?
+  position  Int
+  laps      Int?
+  bestLapMs Int?
+  race      Race     @relation(fields: [raceId], references: [id], onDelete: Cascade)
+  pilot     Pilot    @relation(fields: [pilotId], references: [id], onDelete: Cascade)
+  car       Car?     @relation(fields: [carId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([raceId, pilotId])
+  @@unique([raceId, position])
+  @@index([pilotId])
+  @@index([carId])
+}

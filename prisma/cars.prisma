@@ -1,0 +1,38 @@
+model Car {
+  id          Int          @id @default(autoincrement())
+  name        String
+  chipId      String?      @unique
+  basePi      Int          @default(0)
+  pilotId     Int
+  pilot       Pilot        @relation(fields: [pilotId], references: [id])
+  specs       CarSpec[]
+  raceResults RaceResult[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model SpecCategory {
+  id    Int    @id @default(autoincrement())
+  name  String @unique // "Motor", "Chassis", "Battery", "Drivetrain"
+  specs Spec[]
+}
+
+model Spec {
+  id         Int          @id @default(autoincrement())
+  name       String
+  piValue    Int
+  categoryId Int
+  category   SpecCategory @relation(fields: [categoryId], references: [id])
+  cars       CarSpec[]
+
+  @@unique([categoryId, name])
+}
+
+model CarSpec {
+  carId  Int
+  specId Int
+  car    Car  @relation(fields: [carId], references: [id], onDelete: Cascade)
+  spec   Spec @relation(fields: [specId], references: [id], onDelete: Cascade)
+
+  @@id([carId, specId])
+}

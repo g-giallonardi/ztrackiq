@@ -1,0 +1,29 @@
+enum PilotRole {
+  admin
+  adherent
+  visiteur
+}
+
+model Pilot {
+  id           Int       @id @default(autoincrement())
+  firstname    String
+  lastname     String?
+  nickname     String?
+  email        String    @unique
+  passwordHash String    @default("sha256:e7cd9662965741e20f58915fb0eb0f52696c786c0529d02c316db538bd6ead99")
+  role         PilotRole @default(visiteur)
+  phone        String?
+  active       Boolean   @default(true)
+
+  clubId Int?
+  club   Club? @relation(fields: [clubId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cars        Car[]
+  raceResults RaceResult[]
+
+  @@index([lastname, firstname])
+  @@index([clubId])
+}

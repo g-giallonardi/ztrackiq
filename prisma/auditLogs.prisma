@@ -1,0 +1,19 @@
+model AuditLog {
+  id Int @id @default(autoincrement())
+
+  actorId   Int?
+  actorName String?
+
+  action   String // CREATE, UPDATE, DELETE, DISABLE
+  entity   String // Pilot, Club, Car
+  entityId Int?
+
+  before Json?
+  after  Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([actorId])
+  @@index([createdAt])
+}

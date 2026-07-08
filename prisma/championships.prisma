@@ -1,0 +1,14 @@
+model Championship {
+  id               Int       @id @default(autoincrement())
+  name             String
+  startDate        DateTime
+  endDate          DateTime?
+  scoringMode      String    @default("ALL")
+  bestRaceCount    Int?
+  pointsByPosition Json
+  races            Race[]
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([startDate, endDate])
+}

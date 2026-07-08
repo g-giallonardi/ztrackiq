@@ -1,0 +1,12 @@
+model Club {
+  id        Int      @id @default(autoincrement())
+  name      String
+  sublabel  String?
+  default   String?
+  location  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  pilots    Pilot[]
+
+  @@index([name])
+}
