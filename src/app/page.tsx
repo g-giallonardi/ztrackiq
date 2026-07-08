@@ -252,7 +252,7 @@ export default async function HomePage() {
           className="object-cover"
         />
         <div className="relative flex min-h-56 flex-col justify-end gap-4 p-4 md:min-h-72 md:p-6">
-          <div className="flex flex-wrap justify-end gap-2">
+          <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
             <QuickAction href="/races" icon={<Flag size="17" />} label="Courses" />
             <QuickAction href="/me" icon={<Users size="17" />} label="Mon profil" />
             {canManage && (
@@ -395,7 +395,7 @@ function QuickAction({
   return (
     <Link
       href={href}
-      className="inline-flex items-center gap-2 rounded-md border border-white/70 bg-white/85 px-3 py-2 text-sm font-semibold text-zinc-900 backdrop-blur transition hover:border-[#ff2e88] hover:text-[#ff2e88]"
+      className="inline-flex w-full max-w-full items-center justify-center gap-2 rounded-md border border-white/70 bg-white/85 px-3 py-2 text-sm font-semibold text-zinc-900 backdrop-blur transition hover:border-[#ff2e88] hover:text-[#ff2e88] sm:w-auto"
     >
       {icon}
       {label}
