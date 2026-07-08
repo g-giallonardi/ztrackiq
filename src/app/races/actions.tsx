@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { Prisma } from "@prisma/client";
+import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 type RaceActionRow = {
@@ -175,6 +176,8 @@ async function replaceRaceResults(
 }
 
 export async function saveRace(formData: FormData) {
+  await requireAdmin();
+
   const id = nullableNumber(formData.get("id"));
   const data = {
     name: requiredString(formData.get("name"), "Le nom"),
@@ -299,6 +302,8 @@ export async function saveRace(formData: FormData) {
 }
 
 export async function deleteRace(formData: FormData) {
+  await requireAdmin();
+
   const id = nullableNumber(formData.get("id"));
 
   if (!id) {

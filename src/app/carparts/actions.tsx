@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { auditLog } from "@/lib/audit";
 
@@ -37,6 +38,8 @@ function requiredString(value: FormDataEntryValue | null, field: string) {
 }
 
 export async function saveSpec(formData: FormData) {
+  await requireAdmin();
+
   const id = nullableNumber(formData.get("id"));
 
   const categoryName = formData.get("categoryName")?.toString().trim();
@@ -113,6 +116,8 @@ export async function saveSpec(formData: FormData) {
 }
 
 export async function deleteSpec(formData: FormData) {
+  await requireAdmin();
+
   const id = nullableNumber(formData.get("id"));
 
   if (!id) {

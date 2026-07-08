@@ -1,5 +1,9 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import {
+  DismissibleDrawer,
+  DrawerCloseButton,
+} from "@/components/DismissibleDrawer";
 import { requireCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
@@ -164,7 +168,8 @@ export default async function RacesPage({
     confirmDelete?: string;
   }>;
 }) {
-  await requireCurrentUser();
+  const currentUser = await requireCurrentUser();
+  const canManage = currentUser.role === "admin";
 
   const params = await searchParams;
 
@@ -305,13 +310,15 @@ export default async function RacesPage({
           <p>Planifier et suivre les courses Mini-Z</p>
         </div>
 
-        <Link
-          href="/races?drawer=add"
-          className="inline-flex h-fit shrink-0 items-center gap-2 rounded-md bg-gradient-to-r from-pink-500 to-yellow-400 px-5 py-3 font-semibold text-white shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0"
-        >
-          <Plus />
-          Ajouter une course
-        </Link>
+        {canManage && (
+          <Link
+            href="/races?drawer=add"
+            className="inline-flex h-fit shrink-0 items-center gap-2 rounded-md bg-gradient-to-r from-pink-500 to-yellow-400 px-5 py-3 font-semibold text-white shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0"
+          >
+            <Plus />
+            Ajouter une course
+          </Link>
+        )}
       </div>
 
       <div className="mb-6 flex flex-row flex-wrap gap-3">
@@ -338,10 +345,11 @@ export default async function RacesPage({
         />
       </div>
 
-      <RacesTable races={raceTableRows} tracks={tracks} />
+      <RacesTable races={raceTableRows} tracks={tracks} canManage={canManage} />
 
-      {isDrawerOpen && (
+      {canManage && isDrawerOpen && (
         <RaceDrawer
+          key={`${drawerMode}-${selectedRaceId ?? "new"}`}
           mode={drawerMode}
           race={selectedRace}
           pilots={pilots}
@@ -470,8 +478,9 @@ function RaceDrawer({
     };
   });
   return (
+    <DismissibleDrawer>
     <div className="fixed inset-0 z-50 flex justify-end bg-black/30 backdrop-blur-sm">
-      <Link href="/races" className="flex-1" aria-label="Fermer le volet" />
+      <DrawerCloseButton className="flex-1" ariaLabel="Fermer le volet" />
 
       <aside className="h-full w-full max-w-4xl overflow-y-auto bg-white p-6 shadow-2xl">
         <div className="mb-6 flex items-start justify-between gap-4">
@@ -484,12 +493,11 @@ function RaceDrawer({
             </h2>
           </div>
 
-          <Link
-            href="/races"
+          <DrawerCloseButton
             className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-600 transition hover:border-pink-500 hover:text-pink-600"
           >
             Fermer
-          </Link>
+          </DrawerCloseButton>
         </div>
 
         {isEdit && !race ? (
@@ -609,6 +617,7 @@ function RaceDrawer({
 
       {showDeleteModal && race && <DeleteRaceModal race={race} />}
     </div>
+    </DismissibleDrawer>
   );
 }
 

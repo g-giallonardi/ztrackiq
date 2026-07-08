@@ -183,7 +183,13 @@ function EnergyTag({ energy }: { energy: string }) {
   );
 }
 
-export function CarsTable({ cars }: { cars: CarTableRow[] }) {
+export function CarsTable({
+  cars,
+  canManage = false,
+}: {
+  cars: CarTableRow[];
+  canManage?: boolean;
+}) {
   const [sorting, setSorting] = useState<SortingState>([
     { id: "name", desc: false },
   ]);
@@ -263,24 +269,28 @@ export function CarsTable({ cars }: { cars: CarTableRow[] }) {
             "—"
           ),
       },
-      {
-        id: "actions",
-        header: "Actions",
-        enableSorting: false,
-        cell: ({ row }) => (
-          <div className="text-right">
-            <Link
-              href={`/cars?drawer=edit&carId=${row.original.id}`}
-              className="inline-flex rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 transition hover:border-cyan-500 hover:text-cyan-600"
-              aria-label={`Modifier ${row.original.name}`}
-            >
-              <Pencil size="16" />
-            </Link>
-          </div>
-        ),
-      },
+      ...(canManage
+        ? [
+            {
+              id: "actions",
+              header: "Actions",
+              enableSorting: false,
+              cell: ({ row }) => (
+                <div className="text-right">
+                  <Link
+                    href={`/cars?drawer=edit&carId=${row.original.id}`}
+                    className="inline-flex rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 transition hover:border-cyan-500 hover:text-cyan-600"
+                    aria-label={`Modifier ${row.original.name}`}
+                  >
+                    <Pencil size="16" />
+                  </Link>
+                </div>
+              ),
+            } satisfies ColumnDef<CarTableRow>,
+          ]
+        : []),
     ],
-    [],
+    [canManage],
   );
 
   // eslint-disable-next-line react-hooks/incompatible-library

@@ -2,6 +2,10 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
+import {
+  DismissibleDrawer,
+  DrawerCloseButton,
+} from "@/components/DismissibleDrawer";
 import { requireCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
@@ -25,7 +29,8 @@ export default async function CarpartsPage({
     confirmDelete?: string;
   }>;
 }) {
-  await requireCurrentUser();
+  const currentUser = await requireCurrentUser();
+  const canManage = currentUser.role === "admin";
 
   const [specs, categories] = await Promise.all([
     prisma.spec.findMany({
@@ -72,13 +77,15 @@ export default async function CarpartsPage({
           <p>Gérer les pièces Mini-Z et leur impact PI</p>
         </div>
 
-        <Link
-          href="/carparts?drawer=add"
-          className="inline-flex h-fit shrink-0 items-center gap-2 rounded-md bg-gradient-to-r from-pink-500 to-yellow-400 px-5 py-3 font-semibold text-white shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0"
-        >
-          <Plus />
-          Ajouter une amélioration
-        </Link>
+        {canManage && (
+          <Link
+            href="/carparts?drawer=add"
+            className="inline-flex h-fit shrink-0 items-center gap-2 rounded-md bg-gradient-to-r from-pink-500 to-yellow-400 px-5 py-3 font-semibold text-white shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0"
+          >
+            <Plus />
+            Ajouter une amélioration
+          </Link>
+        )}
       </div>
 
       <div className="mb-6 flex flex-row flex-wrap gap-3">
@@ -121,7 +128,9 @@ export default async function CarpartsPage({
               <th className="px-5 py-4 font-semibold">Impact PI</th>
               <th className="px-5 py-4 font-semibold">Utilisation</th>
               <th className="px-5 py-4 font-semibold">Statut</th>
-              <th className="px-5 py-4 text-right font-semibold">Actions</th>
+              {canManage && (
+                <th className="px-5 py-4 text-right font-semibold">Actions</th>
+              )}
             </tr>
           </thead>
 
@@ -156,32 +165,35 @@ export default async function CarpartsPage({
                   <SpecStatusTag used={spec.cars.length > 0} />
                 </td>
 
-                <td className="px-5 py-4 text-right">
-                  <div className="inline-flex gap-2">
-                    <Link
-                      href={`/carparts?drawer=edit&specId=${spec.id}`}
-                      className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 transition hover:border-cyan-500 hover:text-cyan-600"
-                      aria-label={`Modifier ${spec.name}`}
-                    >
-                      <Pencil size="16" />
-                    </Link>
-                    <Link
-                      href={`/carparts?drawer=edit&specId=${spec.id}&confirmDelete=1`}
-                      className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-600 transition hover:bg-red-100"
-                      aria-label={`Supprimer ${spec.name}`}
-                    >
-                      <Trash2 size="16" />
-                    </Link>
-                  </div>
-                </td>
+                {canManage && (
+                  <td className="px-5 py-4 text-right">
+                    <div className="inline-flex gap-2">
+                      <Link
+                        href={`/carparts?drawer=edit&specId=${spec.id}`}
+                        className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 transition hover:border-cyan-500 hover:text-cyan-600"
+                        aria-label={`Modifier ${spec.name}`}
+                      >
+                        <Pencil size="16" />
+                      </Link>
+                      <Link
+                        href={`/carparts?drawer=edit&specId=${spec.id}&confirmDelete=1`}
+                        className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-600 transition hover:bg-red-100"
+                        aria-label={`Supprimer ${spec.name}`}
+                      >
+                        <Trash2 size="16" />
+                      </Link>
+                    </div>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      {isDrawerOpen && (
+      {canManage && isDrawerOpen && (
         <SpecDrawer
+          key={`${drawerMode}-${selectedSpecId ?? "new"}`}
           mode={drawerMode}
           spec={selectedSpec}
           categories={categories}
@@ -285,8 +297,9 @@ function SpecDrawer({
   const isEdit = mode === "edit";
 
   return (
+    <DismissibleDrawer>
     <div className="fixed inset-0 z-50 flex justify-end bg-black/30 backdrop-blur-sm">
-      <Link href="/carparts" className="flex-1" aria-label="Fermer le volet" />
+      <DrawerCloseButton className="flex-1" ariaLabel="Fermer le volet" />
 
       <aside className="h-full w-full max-w-md overflow-y-auto bg-white p-6 shadow-2xl">
         <div className="mb-6 flex items-start justify-between gap-4">
@@ -299,12 +312,11 @@ function SpecDrawer({
             </h2>
           </div>
 
-          <Link
-            href="/carparts"
+          <DrawerCloseButton
             className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-600 transition hover:border-pink-500 hover:text-pink-600"
           >
             Fermer
-          </Link>
+          </DrawerCloseButton>
         </div>
 
         {isEdit && !spec ? (
@@ -411,6 +423,7 @@ function SpecDrawer({
 
       {showDeleteModal && spec && <DeleteSpecModal spec={spec} />}
     </div>
+    </DismissibleDrawer>
   );
 }
 

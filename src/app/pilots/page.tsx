@@ -1,10 +1,60 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import {
+  DismissibleDrawer,
+  DrawerCloseButton,
+} from "@/components/DismissibleDrawer";
 import { requireCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { Plus, User, UserRoundCheck, Users } from "lucide-react";
+import {
+  Activity,
+  Car,
+  Flag,
+  Gauge,
+  Medal,
+  Plus,
+  Trophy,
+  User,
+  UserRoundCheck,
+  Users,
+} from "lucide-react";
 import { deletePilot, savePilot } from "./actions";
 import { PilotsTable, type PilotTableRow } from "./PilotsTable";
+
+type PilotStats = {
+  races: number | bigint;
+  wins: number | bigint;
+  podiums: number | bigint;
+  bestPosition: number | null;
+  totalLaps: number | bigint | null;
+  averageLaps: number | null;
+  bestLapMs: number | null;
+  averageBestLapMs: number | null;
+};
+
+type RecentResult = {
+  raceId: number;
+  raceName: string;
+  raceDate: Date;
+  trackName: string | null;
+  carName: string | null;
+  position: number;
+  laps: number | null;
+  bestLapMs: number | null;
+};
+
+type CarStatsRow = {
+  id: number;
+  name: string;
+  raceCount: number | bigint;
+  bestResult: number | null;
+};
+
+type PilotDetailsData = {
+  stats: PilotStats | undefined;
+  recentResults: RecentResult[];
+  cars: CarStatsRow[];
+};
 
 function getPilotFullName(pilot: { firstname: string; lastname: string | null }) {
   return [pilot.firstname, pilot.lastname].filter(Boolean).join(" ");
@@ -16,6 +66,30 @@ function getPilotDisplayName(pilot: {
   nickname: string | null;
 }) {
   return pilot.nickname || getPilotFullName(pilot);
+}
+
+function formatDate(date: Date) {
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
+
+function formatBestLap(bestLapMs: number | null | undefined) {
+  if (!bestLapMs) return "-";
+
+  const totalSeconds = bestLapMs / 1000;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds - minutes * 60;
+
+  return minutes > 0
+    ? `${minutes}:${seconds.toFixed(3).padStart(6, "0")}`
+    : seconds.toFixed(3);
+}
+
+function readNumber(value: number | bigint | null | undefined) {
+  return Number(value ?? 0);
 }
 
 function formatPilotRole(role: string) {
@@ -37,9 +111,15 @@ function getPilotRoleClassName(role: string) {
 export default async function PilotsPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ drawer?: string; pilotId?: string; confirmDelete?: string }>;
+  searchParams?: Promise<{
+    drawer?: string;
+    pilotId?: string;
+    detailsPilotId?: string;
+    confirmDelete?: string;
+  }>;
 }) {
-  await requireCurrentUser();
+  const currentUser = await requireCurrentUser();
+  const canManage = currentUser.role === "admin";
 
   const [pilots, clubs] = await Promise.all([
     prisma.pilot.findMany({
@@ -82,8 +162,15 @@ export default async function PilotsPage({
   const params = await searchParams;
   const drawerMode = params?.drawer;
   const selectedPilotId = params?.pilotId ? Number(params.pilotId) : null;
+  const detailsPilotId = params?.detailsPilotId ? Number(params.detailsPilotId) : null;
   const selectedPilot = selectedPilotId
     ? pilots.find((pilot) => pilot.id === selectedPilotId)
+    : null;
+  const detailsPilot = detailsPilotId
+    ? pilots.find((pilot) => pilot.id === detailsPilotId)
+    : null;
+  const detailsData = detailsPilot
+    ? await getPilotDetailsData(detailsPilot.id)
     : null;
   const isDrawerOpen = drawerMode === "add" || drawerMode === "edit";
   const isDeleteModalOpen = drawerMode === "edit" && params?.confirmDelete === "1";
@@ -98,9 +185,10 @@ export default async function PilotsPage({
                 </div>
                 <p>Gérer les pilotes inscrits</p>
             </div>
-            <Link
-                href="/pilots?drawer=add"
-                className="
+            {canManage && (
+              <Link
+                  href="/pilots?drawer=add"
+                  className="
                     inline-flex items-center gap-2
                     h-fit shrink-0
                     rounded-md
@@ -112,11 +200,12 @@ export default async function PilotsPage({
                     hover:-translate-y-0.5
                     hover:shadow-lg
                     active:translate-y-0
-                "
-                >
-                <Plus />
-                Ajouter un pilote
-            </Link>
+                  "
+                  >
+                  <Plus />
+                  Ajouter un pilote
+              </Link>
+            )}
         </div>
 
       <div className="flex flex-row gap-3 flex-wrap mb-6">
@@ -136,16 +225,315 @@ export default async function PilotsPage({
         />
 
       </div>
-      <PilotsTable pilots={pilotTableRows} />
+      <PilotsTable pilots={pilotTableRows} canManage={canManage} />
     
-      {isDrawerOpen && (
+      {canManage && isDrawerOpen && (
         <PilotDrawer
+          key={`${drawerMode}-${selectedPilotId ?? "new"}`}
           mode={drawerMode}
           pilot={selectedPilot}
           clubs={clubs}
           showDeleteModal={isDeleteModalOpen}
         />
       )}
+
+      {detailsPilot && detailsData && (
+        <PilotDetailsModal pilot={detailsPilot} details={detailsData} />
+      )}
+    </div>
+  );
+}
+
+async function getPilotDetailsData(pilotId: number): Promise<PilotDetailsData> {
+  const [statsRows, recentResults, cars] =
+    await Promise.all([
+      prisma.$queryRaw<PilotStats[]>`
+        SELECT
+          COUNT(*)::int AS "races",
+          COUNT(*) FILTER (WHERE "position" = 1)::int AS "wins",
+          COUNT(*) FILTER (WHERE "position" <= 3)::int AS "podiums",
+          MIN("position")::int AS "bestPosition",
+          COALESCE(SUM("laps"), 0)::int AS "totalLaps",
+          AVG("laps")::float AS "averageLaps",
+          MIN("bestLapMs")::int AS "bestLapMs",
+          AVG("bestLapMs")::float AS "averageBestLapMs"
+        FROM "RaceResult"
+        WHERE "pilotId" = ${pilotId}
+      `,
+      prisma.$queryRaw<RecentResult[]>`
+        SELECT
+          "Race"."id" AS "raceId",
+          "Race"."name" AS "raceName",
+          "Race"."raceDate",
+          "Track"."name" AS "trackName",
+          "Car"."name" AS "carName",
+          "RaceResult"."position",
+          "RaceResult"."laps",
+          "RaceResult"."bestLapMs"
+        FROM "RaceResult"
+        INNER JOIN "Race" ON "Race"."id" = "RaceResult"."raceId"
+        LEFT JOIN "Track" ON "Track"."id" = "Race"."trackId"
+        LEFT JOIN "Car" ON "Car"."id" = "RaceResult"."carId"
+        WHERE "RaceResult"."pilotId" = ${pilotId}
+        ORDER BY "Race"."raceDate" DESC, "Race"."createdAt" DESC
+        LIMIT 5
+      `,
+      prisma.$queryRaw<CarStatsRow[]>`
+        SELECT
+          "Car"."id",
+          "Car"."name",
+          COUNT("RaceResult"."id")::int AS "raceCount",
+          MIN("RaceResult"."position")::int AS "bestResult"
+        FROM "Car"
+        LEFT JOIN "RaceResult" ON "RaceResult"."carId" = "Car"."id"
+        WHERE "Car"."pilotId" = ${pilotId}
+        GROUP BY "Car"."id", "Car"."name", "Car"."createdAt"
+        ORDER BY "Car"."createdAt" ASC, "Car"."name" ASC
+      `,
+    ]);
+
+  return {
+    stats: statsRows[0],
+    recentResults,
+    cars,
+  };
+}
+
+function PilotDetailsModal({
+  pilot,
+  details,
+}: {
+  pilot: {
+    id: number;
+    firstname: string;
+    lastname: string | null;
+    nickname: string | null;
+    email: string;
+    role: string;
+    phone: string | null;
+    active: boolean;
+    createdAt: Date;
+    club: { name: string } | null;
+  };
+  details: PilotDetailsData;
+}) {
+  const stats = details.stats;
+  const races = readNumber(stats?.races);
+  const wins = readNumber(stats?.wins);
+  const podiums = readNumber(stats?.podiums);
+  const podiumRate = races > 0 ? Math.round((podiums / races) * 100) : 0;
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+      <Link href="/pilots" className="absolute inset-0" aria-label="Fermer" />
+
+      <div className="relative w-full max-w-6xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-zinc-100 p-5">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-wide text-pink-500">
+              Fiche pilote
+            </p>
+            <h3 className="mt-1 text-3xl font-black text-zinc-900">
+              {getPilotDisplayName(pilot)}
+            </h3>
+            <p className="mt-1 text-sm text-zinc-500">
+              {formatPilotRole(pilot.role)}
+              {pilot.club?.name ? ` · ${pilot.club.name}` : ""}
+              {pilot.active ? " · Actif" : " · Inactif"}
+            </p>
+          </div>
+
+          <Link
+            href="/pilots"
+            className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-600 transition hover:border-pink-500 hover:text-pink-600"
+          >
+            Fermer
+          </Link>
+        </div>
+
+        <div className="max-h-[78vh] overflow-y-auto p-5">
+          <div className="grid gap-3 lg:grid-cols-4">
+            <PilotStatCard
+              icon={<Flag />}
+              label="Courses"
+              value={races.toString()}
+              detail={`${wins} victoire${wins > 1 ? "s" : ""}`}
+              color="bg-pink-100 text-pink-600"
+            />
+            <PilotStatCard
+              icon={<Medal />}
+              label="Podiums"
+              value={podiums.toString()}
+              detail={`${podiumRate}% des courses`}
+              color="bg-yellow-100 text-yellow-700"
+            />
+            <PilotStatCard
+              icon={<Activity />}
+              label="Tours"
+              value={readNumber(stats?.totalLaps).toString()}
+              detail={`${Math.floor(stats?.averageLaps ?? 0)} en moyenne`}
+              color="bg-cyan-100 text-cyan-700"
+            />
+            <PilotStatCard
+              icon={<Gauge />}
+              label="Meilleur tour"
+              value={formatBestLap(stats?.bestLapMs)}
+              detail={`Moy. ${formatBestLap(
+                stats?.averageBestLapMs ? Math.round(stats.averageBestLapMs) : null,
+              )}`}
+              color="bg-purple-100 text-purple-700"
+            />
+          </div>
+
+          <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_360px]">
+            <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+              <div className="mb-4 flex items-center gap-2">
+                <Trophy className="text-pink-500" size="20" />
+                <h4 className="text-lg font-black text-zinc-900">
+                  Résultats
+                </h4>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                <PilotMiniStat
+                  label="Meilleure place"
+                  value={stats?.bestPosition ? `P${stats.bestPosition}` : "-"}
+                />
+                <PilotMiniStat
+                  label="Membre depuis"
+                  value={formatDate(pilot.createdAt)}
+                />
+              </div>
+
+              <div className="mt-5">
+                <h5 className="mb-2 text-sm font-black uppercase text-zinc-600">
+                  Dernières courses
+                </h5>
+                <div className="overflow-hidden rounded-xl border border-zinc-200">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-zinc-50 text-xs uppercase text-zinc-500">
+                      <tr>
+                        <th className="px-3 py-2">Course</th>
+                        <th className="px-3 py-2">Place</th>
+                        <th className="px-3 py-2">Tours</th>
+                        <th className="px-3 py-2">Meilleur</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100">
+                      {details.recentResults.map((result) => (
+                        <tr key={result.raceId}>
+                          <td className="px-3 py-2">
+                            <p className="font-semibold text-zinc-900">
+                              {result.raceName}
+                            </p>
+                            <p className="text-xs text-zinc-500">
+                              {formatDate(result.raceDate)}
+                              {result.trackName ? ` · ${result.trackName}` : ""}
+                            </p>
+                          </td>
+                          <td className="px-3 py-2 font-black text-pink-600">
+                            P{result.position}
+                          </td>
+                          <td className="px-3 py-2 text-zinc-600">
+                            {result.laps ?? "-"}
+                          </td>
+                          <td className="px-3 py-2 text-zinc-600">
+                            {formatBestLap(result.bestLapMs)}
+                          </td>
+                        </tr>
+                      ))}
+                      {details.recentResults.length === 0 && (
+                        <tr>
+                          <td
+                            className="px-3 py-6 text-center text-zinc-500"
+                            colSpan={4}
+                          >
+                            Aucune course enregistrée.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+              <div className="mb-4 flex items-center gap-2">
+                <Car className="text-pink-500" size="20" />
+                <h4 className="text-lg font-black text-zinc-900">
+                  Voitures
+                </h4>
+              </div>
+
+              <div className="space-y-2">
+                {details.cars.map((car) => (
+                  <div
+                    key={car.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-zinc-900">
+                        {car.name}
+                      </p>
+                      <p className="text-xs text-zinc-500">
+                        {readNumber(car.raceCount)} course
+                        {readNumber(car.raceCount) > 1 ? "s" : ""}
+                      </p>
+                    </div>
+                    <p className="text-sm font-black text-purple-600">
+                      {car.bestResult ? `P${car.bestResult}` : "-"}
+                    </p>
+                  </div>
+                ))}
+                {details.cars.length === 0 && (
+                  <div className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50 p-4 text-sm text-zinc-500">
+                    Aucune voiture associée.
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PilotStatCard({
+  icon,
+  label,
+  value,
+  detail,
+  color,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  detail: string;
+  color: string;
+}) {
+  return (
+    <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+      <div className="flex items-center gap-3">
+        <div className={`${color} flex h-10 w-10 items-center justify-center rounded-md`}>
+          {icon}
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase text-zinc-500">{label}</p>
+          <p className="truncate text-2xl font-black text-zinc-900">{value}</p>
+        </div>
+      </div>
+      <p className="mt-2 text-sm font-medium text-zinc-500">{detail}</p>
+    </div>
+  );
+}
+
+function PilotMiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+      <p className="text-xs font-semibold uppercase text-zinc-500">{label}</p>
+      <p className="mt-1 truncate text-lg font-black text-zinc-900">{value}</p>
     </div>
   );
 }
@@ -213,8 +601,9 @@ function PilotDrawer({
   const selectedClubId = pilot?.clubId ?? defaultClub?.id ?? "";
 
   return (
+    <DismissibleDrawer>
     <div className="fixed inset-0 z-50 flex justify-end bg-black/30 backdrop-blur-sm">
-      <Link href="/pilots" className="flex-1" aria-label="Fermer le volet" />
+      <DrawerCloseButton className="flex-1" ariaLabel="Fermer le volet" />
 
       <aside className="h-full w-full max-w-md overflow-y-auto bg-white p-6 shadow-2xl">
         <div className="mb-6 flex items-start justify-between gap-4">
@@ -234,12 +623,11 @@ function PilotDrawer({
             )}
           </div>
 
-          <Link
-            href="/pilots"
+          <DrawerCloseButton
             className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-600 transition hover:border-pink-500 hover:text-pink-600"
           >
             Fermer
-          </Link>
+          </DrawerCloseButton>
         </div>
 
         {isEdit && !pilot ? (
@@ -368,6 +756,7 @@ function PilotDrawer({
 
       {showDeleteModal && pilot && <DeletePilotModal pilot={pilot} />}
     </div>
+    </DismissibleDrawer>
   );
 }
 

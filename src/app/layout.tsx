@@ -40,6 +40,7 @@ export default async function RootLayout({
               <NavItem href="/cars" label="Voitures" />
               <NavItem href="/races" label="Courses" />
               <NavItem href="/championships" label="Championnats" />
+              <NavItem href="/me" label="Mon profil" />
             </nav>
 
             <UserMenu />

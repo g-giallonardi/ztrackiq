@@ -90,7 +90,12 @@ function getActivityConfig(entity: string, action: string) {
   };
 }
 
-function getActivityLink(entity: string, entityId: number | null, action: string) {
+function getActivityLink(
+  entity: string,
+  entityId: number | null,
+  action: string,
+  canManage: boolean,
+) {
   const sectionLink = {
     Pilot: "/pilots",
     Car: "/cars",
@@ -101,6 +106,13 @@ function getActivityLink(entity: string, entityId: number | null, action: string
 
   if (!entityId || action === "DELETE") {
     return sectionLink;
+  }
+
+  if (!canManage) {
+    return {
+      Race: `/races?detailsRaceId=${entityId}`,
+      Championship: `/championships?detailsChampionshipId=${entityId}`,
+    }[entity] ?? sectionLink;
   }
 
   return {
@@ -136,7 +148,8 @@ function formatRelativeDate(date: Date, now: Date) {
 }
 
 export default async function HomePage() {
-  await requireCurrentUser();
+  const currentUser = await requireCurrentUser();
+  const canManage = currentUser.role === "admin";
 
   const now = new Date();
   const startOfYear = new Date(now.getFullYear(), 0, 1);
@@ -264,6 +277,7 @@ export default async function HomePage() {
                       activity.entity,
                       activity.entityId,
                       activity.action,
+                      canManage,
                     )}
                     icon={config.icon}
                     color={config.color}

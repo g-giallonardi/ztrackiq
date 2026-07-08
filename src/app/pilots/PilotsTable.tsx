@@ -122,7 +122,13 @@ function RoleTag({ role, label }: { role: string; label: string }) {
   );
 }
 
-export function PilotsTable({ pilots }: { pilots: PilotTableRow[] }) {
+export function PilotsTable({
+  pilots,
+  canManage = false,
+}: {
+  pilots: PilotTableRow[];
+  canManage?: boolean;
+}) {
   const [sorting, setSorting] = useState<SortingState>([
     { id: "fullName", desc: false },
   ]);
@@ -141,9 +147,12 @@ export function PilotsTable({ pilots }: { pilots: PilotTableRow[] }) {
               {row.original.initials}
             </div>
             <div>
-              <p className="font-semibold text-zinc-900">
+              <Link
+                href={`/pilots?detailsPilotId=${row.original.id}`}
+                className="font-semibold text-zinc-900 transition hover:text-pink-600 hover:underline"
+              >
                 {row.original.firstname}
-              </p>
+              </Link>
               <p className="font-semibold uppercase text-zinc-900">
                 {row.original.lastname || "—"}
               </p>
@@ -181,24 +190,28 @@ export function PilotsTable({ pilots }: { pilots: PilotTableRow[] }) {
         header: "Voiture",
         filterFn: includesValue,
       },
-      {
-        id: "actions",
-        header: "Actions",
-        enableSorting: false,
-        cell: ({ row }) => (
-          <div className="text-right">
-            <Link
-              href={`/pilots?drawer=edit&pilotId=${row.original.id}`}
-              className="inline-flex rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 transition hover:border-pink-500 hover:text-pink-600"
-              aria-label={`Modifier ${row.original.fullName}`}
-            >
-              <Pencil size="16" />
-            </Link>
-          </div>
-        ),
-      },
+      ...(canManage
+        ? [
+            {
+              id: "actions",
+              header: "Actions",
+              enableSorting: false,
+              cell: ({ row }) => (
+                <div className="text-right">
+                  <Link
+                    href={`/pilots?drawer=edit&pilotId=${row.original.id}`}
+                    className="inline-flex rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 transition hover:border-pink-500 hover:text-pink-600"
+                    aria-label={`Modifier ${row.original.fullName}`}
+                  >
+                    <Pencil size="16" />
+                  </Link>
+                </div>
+              ),
+            } satisfies ColumnDef<PilotTableRow>,
+          ]
+        : []),
     ],
-    [],
+    [canManage],
   );
 
   // eslint-disable-next-line react-hooks/incompatible-library

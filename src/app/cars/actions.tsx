@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { auditLog } from "@/lib/audit";
 
@@ -32,6 +33,8 @@ function requiredNumber(value: FormDataEntryValue | null, field: string) {
 }
 
 export async function saveCar(formData: FormData) {
+  await requireAdmin();
+
   const id = nullableNumber(formData.get("id"));
 
   const specIds = formData
@@ -117,6 +120,8 @@ export async function saveCar(formData: FormData) {
 }
 
 export async function deleteCar(formData: FormData) {
+  await requireAdmin();
+
   const id = nullableNumber(formData.get("id"));
 
   if (!id) {

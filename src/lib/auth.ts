@@ -61,3 +61,13 @@ export async function requireCurrentUser() {
 
   return user;
 }
+
+export async function requireAdmin() {
+  const user = await requireCurrentUser();
+
+  if (user.role !== "admin") {
+    redirect("/");
+  }
+
+  return user;
+}

@@ -1,6 +1,10 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { CalendarDays, Medal, Pencil, Plus, Trophy } from "lucide-react";
+import {
+  DismissibleDrawer,
+  DrawerCloseButton,
+} from "@/components/DismissibleDrawer";
 import { requireCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { deleteChampionship, saveChampionship } from "./actions";
@@ -228,7 +232,8 @@ export default async function ChampionshipsPage({
     confirmDelete?: string;
   }>;
 }) {
-  await requireCurrentUser();
+  const currentUser = await requireCurrentUser();
+  const canManage = currentUser.role === "admin";
 
   const [championships, raceResults, cars] = await Promise.all([
     prisma.$queryRaw<ChampionshipRow[]>`
@@ -325,13 +330,15 @@ export default async function ChampionshipsPage({
           <p>Classements calculés depuis les courses et leurs résultats.</p>
         </div>
 
-        <Link
-          href="/championships?drawer=add"
-          className="inline-flex h-fit shrink-0 items-center gap-2 rounded-md bg-gradient-to-r from-pink-500 to-yellow-400 px-5 py-3 font-semibold text-white shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0"
-        >
-          <Plus />
-          Ajouter un championnat
-        </Link>
+        {canManage && (
+          <Link
+            href="/championships?drawer=add"
+            className="inline-flex h-fit shrink-0 items-center gap-2 rounded-md bg-gradient-to-r from-pink-500 to-yellow-400 px-5 py-3 font-semibold text-white shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0"
+          >
+            <Plus />
+            Ajouter un championnat
+          </Link>
+        )}
       </div>
 
       <div className="mb-6 flex flex-row flex-wrap gap-3">
@@ -379,13 +386,15 @@ export default async function ChampionshipsPage({
                   </p>
                 </div>
 
-                <Link
-                  href={`/championships?drawer=edit&championshipId=${championship.id}`}
-                  className="shrink-0 rounded-md border border-zinc-200 px-2.5 py-1.5 text-sm font-medium text-zinc-700 transition hover:border-purple-500 hover:text-purple-600"
-                  aria-label={`Modifier ${championship.name}`}
-                >
-                  <Pencil size="15" />
-                </Link>
+                {canManage && (
+                  <Link
+                    href={`/championships?drawer=edit&championshipId=${championship.id}`}
+                    className="shrink-0 rounded-md border border-zinc-200 px-2.5 py-1.5 text-sm font-medium text-zinc-700 transition hover:border-purple-500 hover:text-purple-600"
+                    aria-label={`Modifier ${championship.name}`}
+                  >
+                    <Pencil size="15" />
+                  </Link>
+                )}
               </div>
 
               <ChampionshipPodium standings={standings} />
@@ -400,8 +409,9 @@ export default async function ChampionshipsPage({
         )}
       </div>
 
-      {isDrawerOpen && (
+      {canManage && isDrawerOpen && (
         <ChampionshipDrawer
+          key={`${drawerMode}-${selectedChampionshipId ?? "new"}`}
           mode={drawerMode}
           championship={selectedChampionship}
           showDeleteModal={isDeleteModalOpen}
@@ -678,11 +688,11 @@ function ChampionshipDrawer({
   const points = getPointsByPosition(championship?.pointsByPosition);
 
   return (
+    <DismissibleDrawer>
     <div className="fixed inset-0 z-50 flex">
-      <Link
-        href="/championships"
+      <DrawerCloseButton
         className="flex-1 bg-black/40 backdrop-blur-sm"
-        aria-label="Fermer le volet"
+        ariaLabel="Fermer le volet"
       />
 
       <aside className="relative h-full w-full max-w-2xl overflow-y-auto bg-white p-6 shadow-2xl">
@@ -696,12 +706,11 @@ function ChampionshipDrawer({
             </h2>
           </div>
 
-          <Link
-            href="/championships"
+          <DrawerCloseButton
             className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-600 transition hover:border-purple-500 hover:text-purple-600"
           >
             Fermer
-          </Link>
+          </DrawerCloseButton>
         </div>
 
         {isEdit && !championship ? (
@@ -832,6 +841,7 @@ function ChampionshipDrawer({
         <DeleteChampionshipModal championship={championship} />
       )}
     </div>
+    </DismissibleDrawer>
   );
 }
 

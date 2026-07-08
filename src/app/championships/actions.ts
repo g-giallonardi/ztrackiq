@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { Prisma } from "@prisma/client";
+import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 const DEFAULT_POINTS = {
@@ -86,6 +87,8 @@ function toAuditJson(value: unknown) {
 }
 
 export async function saveChampionship(formData: FormData) {
+  await requireAdmin();
+
   const id = nullableNumber(formData.get("id"));
   const startDate = requiredDate(formData.get("startDate"), "La date de début");
   const endDate = nullableDate(formData.get("endDate"));
@@ -212,6 +215,8 @@ export async function saveChampionship(formData: FormData) {
 }
 
 export async function deleteChampionship(formData: FormData) {
+  await requireAdmin();
+
   const id = nullableNumber(formData.get("id"));
 
   if (!id) {

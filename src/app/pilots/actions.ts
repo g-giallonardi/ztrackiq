@@ -4,6 +4,7 @@
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import type { Prisma } from "@prisma/client";
+import { requireAdmin } from "@/lib/auth";
 
 type PilotActionRow = {
   id: number;
@@ -21,6 +22,8 @@ type PilotActionRow = {
 };
 
 export async function savePilot(formData: FormData) {
+  await requireAdmin();
+
   const id = emptyToNull(formData.get("id"));
   const firstname = requiredString(formData.get("firstname"));
   const lastname = optionalString(formData.get("lastname"));
@@ -157,6 +160,8 @@ export async function savePilot(formData: FormData) {
 }
 
 export async function deletePilot(formData: FormData) {
+  await requireAdmin();
+
   const id = toNullableNumber(formData.get("id"));
 
   if (!id) {
