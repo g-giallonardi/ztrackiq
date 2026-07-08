@@ -208,7 +208,7 @@ export default async function PilotsPage({
             )}
         </div>
 
-      <div className="flex flex-row gap-3 flex-wrap mb-6">
+      <div className="mb-6 grid grid-cols-2 gap-2 sm:flex sm:flex-row sm:flex-wrap sm:gap-3">
         <QuickViewCard
             icon={<UserRoundCheck />}
             color='text-green-500'
@@ -552,18 +552,18 @@ function QuickViewCard({
   label: string;
 }) {
   return (
-    <div className="group flex items-center gap-4 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-1 hover:border-pink-500 hover:shadow-lg">
+    <div className="group flex items-center gap-2 rounded-xl border border-zinc-200 bg-white p-3 shadow-sm transition-all hover:-translate-y-1 hover:border-pink-500 hover:shadow-lg sm:gap-4 sm:p-5">
       <div
-        className={`${color} ${bgColor} flex h-14 w-14 items-center justify-center rounded-md`}
+        className={`${color} ${bgColor} flex h-10 w-10 shrink-0 items-center justify-center rounded-md sm:h-14 sm:w-14`}
       >
         {icon}
       </div>
 
       <div>
-        <p className="text-3xl font-bold leading-none text-zinc-900">
+        <p className="text-xl font-bold leading-none text-zinc-900 sm:text-3xl">
           {value}
         </p>
-        <p className="mt-1 text-sm text-zinc-500">
+        <p className="mt-1 text-xs text-zinc-500 sm:text-sm">
           {label}
         </p>
       </div>
