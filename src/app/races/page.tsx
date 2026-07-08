@@ -482,7 +482,7 @@ function RaceDrawer({
     <div className="fixed inset-0 z-50 flex justify-end bg-black/30 backdrop-blur-sm">
       <DrawerCloseButton className="flex-1" ariaLabel="Fermer le volet" />
 
-      <aside className="h-full w-full max-w-4xl overflow-y-auto bg-white p-6 shadow-2xl">
+      <aside className="h-full w-full max-w-2xl overflow-y-auto bg-white p-6 shadow-2xl">
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
             <p className="text-sm font-semibold uppercase tracking-wide text-pink-500">

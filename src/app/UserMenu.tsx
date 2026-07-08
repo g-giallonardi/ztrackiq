@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { logout } from "./logout/actions";
 import { useUserStore } from "@/stores/userStore";
+import { theme } from "@/lib/theme";
 
 function getDisplayName(user: {
   firstname: string;
@@ -30,7 +31,15 @@ export function UserMenu() {
     return (
       <Link
         href="/login"
-        className="mt-8 block rounded-xl border border-white/10 px-4 py-3 text-sm font-bold uppercase text-white transition hover:border-pink-500 hover:bg-pink-500"
+        className="mt-8 block rounded-xl border border-white/10 px-4 py-3 text-sm font-bold uppercase text-white transition"
+        onMouseEnter={(event) => {
+          event.currentTarget.style.borderColor = theme.brand.ztrack;
+          event.currentTarget.style.backgroundColor = theme.brand.ztrack;
+        }}
+        onMouseLeave={(event) => {
+          event.currentTarget.style.borderColor = "";
+          event.currentTarget.style.backgroundColor = "";
+        }}
       >
         Connexion
       </Link>
@@ -49,7 +58,15 @@ export function UserMenu() {
       <form action={logout} className="mt-3">
         <button
           type="submit"
-          className="w-full rounded-md border border-white/10 px-3 py-2 text-xs font-bold uppercase text-white transition hover:border-pink-500 hover:bg-pink-500"
+          className="w-full rounded-md border border-white/10 px-3 py-2 text-xs font-bold uppercase text-white transition"
+          onMouseEnter={(event) => {
+            event.currentTarget.style.borderColor = theme.brand.ztrack;
+            event.currentTarget.style.backgroundColor = theme.brand.ztrack;
+          }}
+          onMouseLeave={(event) => {
+            event.currentTarget.style.borderColor = "";
+            event.currentTarget.style.backgroundColor = "";
+          }}
         >
           Déconnexion
         </button>

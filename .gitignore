@@ -21,6 +21,7 @@ next-env.d.ts
 build/
 dist/
 coverage/
+backups/
 
 # TypeScript
 *.tsbuildinfo

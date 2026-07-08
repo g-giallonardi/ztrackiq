@@ -3,6 +3,7 @@ import Image from "next/image";
 import { Car, Flag, Trophy, Users, Wrench } from "lucide-react";
 import { requireCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { theme } from "@/lib/theme";
 
 type CountRow = {
   count: number | bigint;
@@ -60,32 +61,32 @@ function getActivityConfig(entity: string, action: string) {
   const entityConfig = {
     Pilot: {
       label: "Pilote",
-      color: "bg-pink-500",
+      color: theme.activity.pilot,
       icon: <Users size={16} />,
     },
     Car: {
       label: "Voiture",
-      color: "bg-cyan-500",
+      color: theme.activity.car,
       icon: <Car size={16} />,
     },
     Race: {
       label: "Course",
-      color: "bg-yellow-400",
+      color: theme.activity.race,
       icon: <Flag size={16} />,
     },
     Championship: {
       label: "Championnat",
-      color: "bg-purple-600",
+      color: theme.activity.championship,
       icon: <Trophy size={16} />,
     },
     Spec: {
       label: "Pièce",
-      color: "bg-zinc-700",
+      color: theme.activity.part,
       icon: <Wrench size={16} />,
     },
   }[entity] ?? {
     label: entity,
-    color: "bg-zinc-700",
+    color: theme.activity.part,
     icon: <Wrench size={16} />,
   };
 
@@ -243,7 +244,7 @@ export default async function HomePage() {
     <div className="min-h-screen bg-zinc-50 text-zinc-900">
       <section className="relative overflow-hidden bg-zinc-100">
         <Image
-          src="/images/banner.png"
+          src="/images/banner-20260708-2239.png"
           alt=""
           fill
           priority
@@ -267,7 +268,10 @@ export default async function HomePage() {
 
       <div className="p-4">
         <div className="mb-4">
-          <p className="text-xs font-black uppercase tracking-wide text-pink-500">
+          <p
+            className="text-xs font-black uppercase tracking-wide"
+            style={{ color: theme.brand.ztrack }}
+          >
             ZTrackIQ
           </p>
           <h1 className="mt-1 text-2xl font-black md:text-3xl">
@@ -391,7 +395,7 @@ function QuickAction({
   return (
     <Link
       href={href}
-      className="inline-flex items-center gap-2 rounded-md border border-white/70 bg-white/85 px-3 py-2 text-sm font-semibold text-zinc-900 backdrop-blur transition hover:border-pink-300 hover:text-pink-600"
+      className="inline-flex items-center gap-2 rounded-md border border-white/70 bg-white/85 px-3 py-2 text-sm font-semibold text-zinc-900 backdrop-blur transition hover:border-[#ff2e88] hover:text-[#ff2e88]"
     >
       {icon}
       {label}
@@ -450,7 +454,10 @@ function LastActivityCard({
   return (
     <Link href={link} className="block px-4 py-3 transition hover:bg-zinc-50">
       <div className="flex items-center gap-3">
-        <div className={`${color} flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white`}>
+        <div
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white"
+          style={{ backgroundColor: color }}
+        >
           {icon}
         </div>
         <div className="min-w-0 flex-1">

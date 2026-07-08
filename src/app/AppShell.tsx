@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { useState } from "react";
 import { UserMenu } from "./UserMenu";
+import { theme } from "@/lib/theme";
 
 const navItems = [
   { href: "/", label: "Dashboard" },
@@ -18,8 +19,8 @@ const navItems = [
 function Logo() {
   return (
     <Link href="/" className="text-3xl font-black italic">
-      <span className="text-pink-500">ZTRACK</span>
-      <span className="text-yellow-300">IQ</span>
+      <span style={{ color: theme.brand.ztrack }}>ZTRACK</span>
+      <span style={{ color: theme.brand.iq }}>IQ</span>
     </Link>
   );
 }
@@ -40,9 +41,16 @@ function NavItem({
     <Link
       href={href}
       onClick={onClick}
-      className={`block rounded-xl px-4 py-3 font-bold uppercase text-white transition ${
-        active ? "bg-pink-500" : "hover:bg-pink-500"
-      }`}
+      className="block rounded-xl px-4 py-3 font-bold uppercase text-white transition"
+      style={{
+        backgroundColor: active ? theme.brand.ztrack : undefined,
+      }}
+      onMouseEnter={(event) => {
+        if (!active) event.currentTarget.style.backgroundColor = theme.brand.ztrack;
+      }}
+      onMouseLeave={(event) => {
+        if (!active) event.currentTarget.style.backgroundColor = "";
+      }}
     >
       {label}
     </Link>
@@ -69,19 +77,34 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen lg:flex">
-      <aside className="hidden w-72 shrink-0 border-r border-white/10 bg-black/80 p-6 lg:block">
+      <aside
+        className="hidden w-72 shrink-0 border-r border-white/10 p-6 lg:block"
+        style={{ backgroundColor: theme.app.sidebar }}
+      >
         <Logo />
         <Navigation />
         <UserMenu />
       </aside>
 
-      <header className="sticky top-0 z-40 flex items-center justify-between border-b border-white/10 bg-black/90 px-4 py-3 lg:hidden">
+      <header
+        className="sticky top-0 z-40 flex items-center justify-between border-b border-white/10 px-4 py-3 lg:hidden"
+        style={{ backgroundColor: theme.app.header }}
+      >
         <Logo />
         <button
           type="button"
           onClick={() => setMobileMenuOpen(true)}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-white/15 text-white transition hover:border-pink-500 hover:bg-pink-500"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-white/15 text-white transition"
           aria-label="Ouvrir le menu"
+          style={{ "--hover-color": theme.brand.ztrack } as React.CSSProperties}
+          onMouseEnter={(event) => {
+            event.currentTarget.style.borderColor = theme.brand.ztrack;
+            event.currentTarget.style.backgroundColor = theme.brand.ztrack;
+          }}
+          onMouseLeave={(event) => {
+            event.currentTarget.style.borderColor = "";
+            event.currentTarget.style.backgroundColor = "";
+          }}
         >
           <Menu size={22} />
         </button>
@@ -91,18 +114,30 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="fixed inset-0 z-50 lg:hidden">
           <button
             type="button"
-            className="absolute inset-0 bg-black/60"
+            className="absolute inset-0"
+            style={{ backgroundColor: theme.app.overlay }}
             onClick={() => setMobileMenuOpen(false)}
             aria-label="Fermer le menu"
           />
-          <aside className="relative h-full w-72 max-w-[85vw] overflow-y-auto border-r border-white/10 bg-black p-6">
+          <aside
+            className="relative h-full w-72 max-w-[85vw] overflow-y-auto border-r border-white/10 p-6"
+            style={{ backgroundColor: theme.app.bg }}
+          >
             <div className="flex items-center justify-between gap-4">
               <Logo />
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(false)}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-white/15 text-white transition hover:border-pink-500 hover:bg-pink-500"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-white/15 text-white transition"
                 aria-label="Fermer le menu"
+                onMouseEnter={(event) => {
+                  event.currentTarget.style.borderColor = theme.brand.ztrack;
+                  event.currentTarget.style.backgroundColor = theme.brand.ztrack;
+                }}
+                onMouseLeave={(event) => {
+                  event.currentTarget.style.borderColor = "";
+                  event.currentTarget.style.backgroundColor = "";
+                }}
               >
                 <X size={20} />
               </button>
@@ -114,7 +149,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      <main className="min-w-0 flex-1 bg-gradient-to-br from-pink-600 via-yellow-400 to-cyan-400">
+      <main className={`min-w-0 flex-1 bg-gradient-to-br ${theme.gradient.main}`}>
         {children}
       </main>
     </div>

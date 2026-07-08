@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthStoreProvider } from "./AuthStoreProvider";
 import { AppShell } from "./AppShell";
 import { getCurrentUser } from "@/lib/auth";
+import { theme } from "@/lib/theme";
 
 export const metadata = {
   title: "ZTrackIQ",
@@ -24,7 +25,10 @@ export default async function RootLayout({
 
   return (
     <html lang="fr">
-      <body className={`${roboto.className} min-h-screen bg-[#09090f] text-white`}>
+      <body
+        className={`${roboto.className} min-h-screen text-white`}
+        style={{ backgroundColor: theme.app.bg }}
+      >
         <AuthStoreProvider initialUser={currentUser}>
           <AppShell>{children}</AppShell>
         </AuthStoreProvider>
