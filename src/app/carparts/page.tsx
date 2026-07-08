@@ -66,9 +66,9 @@ export default async function CarpartsPage({
 
   return (
     <div className="m-2 rounded bg-white p-2 text-gray-900">
-      <div className="flex flex-row items-start justify-between gap-4">
+      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
         <div>
-          <div className="my-2 flex flex-row gap-2 text-5xl">
+          <div className="my-2 flex flex-row gap-2 text-4xl sm:text-5xl">
             <p className="rounded bg-pink-200 p-2 text-pink-500">
               <Wrench size="30" />
             </p>
@@ -80,7 +80,7 @@ export default async function CarpartsPage({
         {canManage && (
           <Link
             href="/carparts?drawer=add"
-            className="inline-flex h-fit shrink-0 items-center gap-2 rounded-md bg-gradient-to-r from-pink-500 to-yellow-400 px-5 py-3 font-semibold text-white shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0"
+            className="inline-flex h-fit w-full shrink-0 items-center justify-center gap-2 rounded-md bg-gradient-to-r from-pink-500 to-yellow-400 px-5 py-3 font-semibold text-white shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0 sm:w-auto"
           >
             <Plus />
             Ajouter une amélioration
