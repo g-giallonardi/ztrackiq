@@ -44,6 +44,15 @@ function equalsBooleanOrEmpty(rowValue: unknown, filterValue: unknown) {
   return String(rowValue) === String(filterValue);
 }
 
+function equalsRoleOrEmpty(rowValue: unknown, filterValue: unknown) {
+  if (!filterValue) return true;
+
+  const role = String(rowValue ?? "");
+  const filter = String(filterValue);
+
+  return filter === "none" ? !role : role === filter;
+}
+
 function ColumnFilter({ column }: { column: Column<PilotTableRow, unknown> }) {
   const value = column.getFilterValue()?.toString() ?? "";
 
@@ -66,6 +75,7 @@ function ColumnFilter({ column }: { column: Column<PilotTableRow, unknown> }) {
         ) : (
           <>
             <option value="">Tous</option>
+            <option value="none">Aucun rôle</option>
             <option value="admin">Admin</option>
             <option value="adherent">Adhérent</option>
             <option value="visiteur">Visiteur</option>
@@ -149,13 +159,14 @@ export function PilotsTable({
             <div>
               <Link
                 href={`/pilots?detailsPilotId=${row.original.id}`}
-                className="font-semibold text-zinc-900 transition hover:text-pink-600 hover:underline"
+                className="font-semibold text-zinc-900 transition hover:text-pink-600 "
               >
                 {row.original.firstname}
+              
+                <p className="font-semibold uppercase text-zinc-900 transition  hover:text-pink-600 ">
+                  {row.original.lastname || "—"}
+                </p>
               </Link>
-              <p className="font-semibold uppercase text-zinc-900">
-                {row.original.lastname || "—"}
-              </p>
             </div>
           </div>
         ),
@@ -175,7 +186,7 @@ export function PilotsTable({
       {
         accessorKey: "role",
         header: "Rôle",
-        filterFn: includesValue,
+        filterFn: equalsRoleOrEmpty,
         cell: ({ row }) => (
           <RoleTag role={row.original.role} label={row.original.roleLabel} />
         ),
@@ -254,8 +265,8 @@ export function PilotsTable({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-row flex-wrap items-end gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
-        <label className="block">
+      <div className="flex flex-col items-stretch gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 sm:flex-row sm:flex-wrap sm:items-end">
+        <label className="block sm:w-auto">
           <span className="mb-1.5 block text-sm font-semibold text-zinc-700">
             Recherche
           </span>
@@ -264,7 +275,7 @@ export function PilotsTable({
             value={globalFilter}
             onChange={(event) => setGlobalFilter(event.currentTarget.value)}
             placeholder="Pilote, pseudo, club..."
-            className="min-w-72 rounded-md border border-zinc-200 bg-white px-3 py-2 text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20"
+            className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 sm:min-w-72"
           />
         </label>
 
@@ -280,7 +291,71 @@ export function PilotsTable({
         </button>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
+      <div className="space-y-3 md:hidden">
+        {table.getRowModel().rows.map((row) => {
+          const pilot = row.original;
+
+          return (
+            <div
+              key={row.id}
+              className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-pink-100 font-bold text-pink-600">
+                    {pilot.initials}
+                  </div>
+                  <div className="min-w-0">
+                    <Link
+                      href={`/pilots?detailsPilotId=${pilot.id}`}
+                      className="block truncate font-black text-zinc-900 transition hover:text-pink-600 hover:underline"
+                    >
+                      {pilot.firstname}
+                    </Link>
+                    <p className="truncate text-sm font-semibold uppercase text-zinc-900">
+                      {pilot.lastname || "—"}
+                    </p>
+                    {pilot.nickname && (
+                      <p className="truncate text-sm text-zinc-500">
+                        {pilot.nickname}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {canManage && (
+                  <Link
+                    href={`/pilots?drawer=edit&pilotId=${pilot.id}`}
+                    className="inline-flex shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 transition hover:border-pink-500 hover:text-pink-600"
+                    aria-label={`Modifier ${pilot.fullName}`}
+                  >
+                    <Pencil size="16" />
+                  </Link>
+                )}
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <PilotStatusTag active={pilot.active} />
+                <RoleTag role={pilot.role} label={pilot.roleLabel} />
+                <span className="inline-flex items-center rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-600 ring-1 ring-inset ring-zinc-500/20">
+                  {pilot.clubName}
+                </span>
+                <span className="inline-flex items-center rounded-full bg-cyan-50 px-3 py-1 text-xs font-semibold text-cyan-700 ring-1 ring-inset ring-cyan-600/20">
+                  {pilot.carName}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+
+        {table.getRowModel().rows.length === 0 && (
+          <div className="rounded-xl border border-zinc-200 bg-white px-5 py-10 text-center text-zinc-500">
+            Aucun pilote ne correspond aux filtres.
+          </div>
+        )}
+      </div>
+
+      <div className="hidden overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm md:block">
         <table className="w-full text-left text-sm">
           <thead className="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
             {table.getHeaderGroups().map((headerGroup) => (
@@ -348,14 +423,14 @@ export function PilotsTable({
         </table>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-zinc-600">
+      <div className="flex flex-col items-stretch justify-between gap-3 text-sm text-zinc-600 sm:flex-row sm:flex-wrap sm:items-center">
         <p>
           {table.getFilteredRowModel().rows.length} pilote
           {table.getFilteredRowModel().rows.length > 1 ? "s" : ""} filtré
           {table.getFilteredRowModel().rows.length > 1 ? "s" : ""}
         </p>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => table.previousPage()}

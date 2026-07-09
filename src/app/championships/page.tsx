@@ -6,6 +6,10 @@ import {
   DrawerCloseButton,
 } from "@/components/DismissibleDrawer";
 import { requireCurrentUser } from "@/lib/auth";
+import {
+  buildDuplicateFirstnameSet,
+  getPilotDisplayName,
+} from "@/lib/pilotDisplay";
 import { prisma } from "@/lib/prisma";
 import { deleteChampionship, saveChampionship } from "./actions";
 
@@ -49,6 +53,13 @@ type ChampionshipRaceResultRow = {
   position: number;
 };
 
+type ChampionshipRaceSummary = {
+  raceId: number;
+  raceName: string;
+  raceDate: Date;
+  raceCreatedAt: Date;
+};
+
 type CarWithPiSpecs = {
   id: number;
   pilotId: number;
@@ -64,6 +75,17 @@ type StandingRow = {
   polePositions: number;
   bestPosition: number | null;
   scores: number[];
+  raceResults: StandingRaceResult[];
+};
+
+type StandingRaceResult = {
+  raceId: number;
+  raceName: string;
+  raceDate: Date;
+  raceCreatedAt: Date;
+  position: number;
+  points: number;
+  counted: boolean;
 };
 
 function formatPiClass(value: number) {
@@ -102,18 +124,6 @@ function formatChampionshipPeriod(championship: {
   return `${formatDate(championship.startDate)} - ${
     championship.endDate ? formatDate(championship.endDate) : "EN COURS"
   }`;
-}
-
-function getPilotFullName(pilot: { firstname: string; lastname: string | null }) {
-  return [pilot.firstname, pilot.lastname].filter(Boolean).join(" ");
-}
-
-function getPilotDisplayName(pilot: {
-  firstname: string;
-  lastname: string | null;
-  nickname: string | null;
-}) {
-  return pilot.nickname || getPilotFullName(pilot);
 }
 
 function getResultCar(
@@ -159,11 +169,40 @@ function getChampionshipResults(
   );
 }
 
+function getChampionshipRaces(
+  championship: ChampionshipRow,
+  raceResults: ChampionshipRaceResultRow[],
+) {
+  return [
+    ...new Map(
+      getChampionshipResults(championship, raceResults).map((result) => [
+        result.raceId,
+        {
+          raceId: result.raceId,
+          raceName: result.raceName,
+          raceDate: result.raceDate,
+          raceCreatedAt: result.raceCreatedAt,
+        },
+      ]),
+    ).values(),
+  ].sort((a, b) => {
+    if (a.raceDate.getTime() !== b.raceDate.getTime()) {
+      return a.raceDate.getTime() - b.raceDate.getTime();
+    }
+    if (a.raceCreatedAt.getTime() !== b.raceCreatedAt.getTime()) {
+      return a.raceCreatedAt.getTime() - b.raceCreatedAt.getTime();
+    }
+
+    return a.raceId - b.raceId;
+  });
+}
+
 function getStandings(
   championship: ChampionshipRow,
   raceResults: ChampionshipRaceResultRow[],
   carById: Map<number, CarWithPiSpecs>,
   carByPilotId: Map<number, CarWithPiSpecs>,
+  duplicateFirstnames: ReadonlySet<string>,
   piClass?: string,
 ) {
   const pointsByPosition = getPointsByPosition(championship.pointsByPosition);
@@ -178,13 +217,14 @@ function getStandings(
     const score = getRacePoints(result, pointsByPosition);
     const current = rows.get(result.pilotId) ?? {
       pilotId: result.pilotId,
-      pilotName: getPilotDisplayName(result),
+      pilotName: getPilotDisplayName(result, duplicateFirstnames),
       points: 0,
       races: 0,
       countedRaces: 0,
       polePositions: 0,
       bestPosition: null,
       scores: [],
+      raceResults: [],
     };
 
     current.races += 1;
@@ -194,20 +234,61 @@ function getStandings(
         ? result.position
         : Math.min(current.bestPosition, result.position);
     current.scores.push(score);
+    current.raceResults.push({
+      raceId: result.raceId,
+      raceName: result.raceName,
+      raceDate: result.raceDate,
+      raceCreatedAt: result.raceCreatedAt,
+      position: result.position,
+      points: score,
+      counted: false,
+    });
     rows.set(result.pilotId, current);
   }
 
   return [...rows.values()]
     .map((standing) => {
-      const countedScores =
+      const countedRaceIds = new Set(
         championship.scoringMode === "BEST"
-          ? [...standing.scores]
-              .sort((a, b) => b - a)
+          ? [...standing.raceResults]
+              .sort((a, b) => {
+                if (b.points !== a.points) return b.points - a.points;
+                if (a.position !== b.position) return a.position - b.position;
+                if (a.raceDate.getTime() !== b.raceDate.getTime()) {
+                  return a.raceDate.getTime() - b.raceDate.getTime();
+                }
+                if (a.raceCreatedAt.getTime() !== b.raceCreatedAt.getTime()) {
+                  return a.raceCreatedAt.getTime() - b.raceCreatedAt.getTime();
+                }
+
+                return a.raceId - b.raceId;
+              })
               .slice(0, championship.bestRaceCount ?? 1)
-          : standing.scores;
+              .map((result) => result.raceId)
+          : standing.raceResults.map((result) => result.raceId),
+      );
+      const raceResults = standing.raceResults
+        .map((result) => ({
+          ...result,
+          counted: countedRaceIds.has(result.raceId),
+        }))
+        .sort((a, b) => {
+          if (a.raceDate.getTime() !== b.raceDate.getTime()) {
+            return a.raceDate.getTime() - b.raceDate.getTime();
+          }
+          if (a.raceCreatedAt.getTime() !== b.raceCreatedAt.getTime()) {
+            return a.raceCreatedAt.getTime() - b.raceCreatedAt.getTime();
+          }
+
+          return a.raceId - b.raceId;
+        });
+      const countedScores = raceResults
+        .filter((result) => result.counted)
+        .map((result) => result.points);
 
       return {
         ...standing,
+        raceResults,
         countedRaces: countedScores.length,
         points: countedScores.reduce((sum, score) => sum + score, 0),
       };
@@ -229,6 +310,7 @@ export default async function ChampionshipsPage({
     drawer?: string;
     championshipId?: string;
     detailsChampionshipId?: string;
+    championshipPilotId?: string;
     confirmDelete?: string;
   }>;
 }) {
@@ -289,6 +371,10 @@ export default async function ChampionshipsPage({
       carByPilotId.set(car.pilotId, car);
     }
   }
+  const championshipPilots = [
+    ...new Map(raceResults.map((result) => [result.pilotId, result])).values(),
+  ];
+  const duplicateFirstnames = buildDuplicateFirstnameSet(championshipPilots);
 
   const params = await searchParams;
   const drawerMode = params?.drawer;
@@ -298,6 +384,14 @@ export default async function ChampionshipsPage({
   const detailsChampionshipId = params?.detailsChampionshipId
     ? Number(params.detailsChampionshipId)
     : null;
+  const parsedChampionshipPilotId = params?.championshipPilotId
+    ? Number(params.championshipPilotId)
+    : null;
+  const championshipPilotId =
+    parsedChampionshipPilotId !== null &&
+    Number.isInteger(parsedChampionshipPilotId)
+      ? parsedChampionshipPilotId
+      : null;
   const selectedChampionship = selectedChampionshipId
     ? championships.find(
         (championship) => championship.id === selectedChampionshipId,
@@ -365,6 +459,7 @@ export default async function ChampionshipsPage({
             raceResults,
             carById,
             carByPilotId,
+            duplicateFirstnames,
           );
 
           return (
@@ -418,34 +513,43 @@ export default async function ChampionshipsPage({
         />
       )}
 
-      {detailsChampionship && (
-        <ChampionshipDetailsModal
-          championship={detailsChampionship}
-          standings={getStandings(
+      {detailsChampionship &&
+        (() => {
+          const standings = getStandings(
             detailsChampionship,
             raceResults,
             carById,
             carByPilotId,
-          )}
-          classStandings={PI_CLASSES.map((piClass) => ({
-            piClass,
-            standings: getStandings(
-              detailsChampionship,
-              raceResults,
-              carById,
-              carByPilotId,
-              piClass,
-            ),
-          }))}
-          raceCount={
-            new Set(
-              getChampionshipResults(detailsChampionship, raceResults).map(
-                (result) => result.raceId,
-              ),
-            ).size
-          }
-        />
-      )}
+            duplicateFirstnames,
+          );
+
+          return (
+            <ChampionshipDetailsModal
+              championship={detailsChampionship}
+              standings={standings}
+              selectedPilotId={championshipPilotId}
+              races={getChampionshipRaces(detailsChampionship, raceResults)}
+              classStandings={PI_CLASSES.map((piClass) => ({
+                piClass,
+                standings: getStandings(
+                  detailsChampionship,
+                  raceResults,
+                  carById,
+                  carByPilotId,
+                  duplicateFirstnames,
+                  piClass,
+                ),
+              }))}
+              raceCount={
+                new Set(
+                  getChampionshipResults(detailsChampionship, raceResults).map(
+                    (result) => result.raceId,
+                  ),
+                ).size
+              }
+            />
+          );
+        })()}
     </div>
   );
 }
@@ -531,14 +635,24 @@ function PodiumPlace({
 function ChampionshipDetailsModal({
   championship,
   standings,
+  selectedPilotId,
+  races,
   classStandings,
   raceCount,
 }: {
   championship: ChampionshipRow;
   standings: StandingRow[];
+  selectedPilotId: number | null;
+  races: ChampionshipRaceSummary[];
   classStandings: { piClass: string; standings: StandingRow[] }[];
   raceCount: number;
 }) {
+  const selectedStanding =
+    selectedPilotId === null
+      ? null
+      : standings.find((standing) => standing.pilotId === selectedPilotId) ??
+        null;
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
       <Link href="/championships" className="absolute inset-0" aria-label="Fermer" />
@@ -580,7 +694,19 @@ function ChampionshipDetailsModal({
               Aucun résultat de course dans cette période.
             </div>
           ) : (
-            <StandingsTable championship={championship} standings={standings} />
+            <StandingsTable
+              championship={championship}
+              standings={standings}
+              selectedPilotId={selectedPilotId}
+            />
+          )}
+
+          {selectedStanding && (
+            <ChampionshipPilotResults
+              championship={championship}
+              standing={selectedStanding}
+              races={races}
+            />
           )}
 
           <div className="mt-6">
@@ -606,6 +732,7 @@ function ChampionshipDetailsModal({
                     <StandingsTable
                       championship={championship}
                       standings={standings}
+                      selectedPilotId={selectedPilotId}
                       compact
                     />
                   )}
@@ -622,10 +749,12 @@ function ChampionshipDetailsModal({
 function StandingsTable({
   championship,
   standings,
+  selectedPilotId,
   compact = false,
 }: {
   championship: ChampionshipRow;
   standings: StandingRow[];
+  selectedPilotId: number | null;
   compact?: boolean;
 }) {
   const cellClass = compact ? "px-3 py-2" : "px-5 py-2";
@@ -645,12 +774,24 @@ function StandingsTable({
         </thead>
         <tbody className="divide-y divide-zinc-100">
           {standings.map((standing, index) => (
-            <tr key={standing.pilotId} className="hover:bg-zinc-50">
+            <tr
+              key={standing.pilotId}
+              className={
+                selectedPilotId === standing.pilotId
+                  ? "bg-purple-50 hover:bg-purple-50"
+                  : "hover:bg-zinc-50"
+              }
+            >
               <td className={`${cellClass} font-black text-zinc-900`}>
                 {index + 1}
               </td>
-              <td className={`${cellClass} font-semibold text-zinc-900`}>
-                {standing.pilotName}
+              <td className={`${cellClass} font-semibold`}>
+                <Link
+                  href={`/championships?detailsChampionshipId=${championship.id}&championshipPilotId=${standing.pilotId}`}
+                  className="text-zinc-900 transition hover:text-purple-600 hover:underline"
+                >
+                  {standing.pilotName}
+                </Link>
               </td>
               <td className={`${cellClass} text-base font-black text-purple-600`}>
                 {standing.points}
@@ -672,6 +813,92 @@ function StandingsTable({
         </tbody>
       </table>
     </div>
+  );
+}
+
+function ChampionshipPilotResults({
+  championship,
+  standing,
+  races,
+}: {
+  championship: ChampionshipRow;
+  standing: StandingRow;
+  races: ChampionshipRaceSummary[];
+}) {
+  const resultByRaceId = new Map(
+    standing.raceResults.map((result) => [result.raceId, result]),
+  );
+
+  return (
+    <section className="mt-5 overflow-hidden rounded-xl border border-purple-200 bg-purple-50/40">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-purple-100 bg-white px-4 py-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-purple-600">
+            Détail pilote
+          </p>
+          <h4 className="mt-0.5 text-lg font-black text-zinc-900">
+            {standing.pilotName}
+          </h4>
+          <p className="mt-1 text-xs text-zinc-500">
+            Les courses en gras sont celles retenues dans le total.
+          </p>
+        </div>
+
+        <Link
+          href={`/championships?detailsChampionshipId=${championship.id}`}
+          className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-600 transition hover:border-purple-500 hover:text-purple-600"
+        >
+          Fermer le détail
+        </Link>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
+            <tr>
+              <th className="px-4 py-2 font-semibold">Course</th>
+              <th className="px-4 py-2 font-semibold">Date</th>
+              <th className="px-4 py-2 font-semibold">Place</th>
+              <th className="px-4 py-2 font-semibold">Points</th>
+              <th className="px-4 py-2 font-semibold">Statut</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-100 bg-white">
+            {races.flatMap((race) => {
+              const result = resultByRaceId.get(race.raceId);
+              if (!result) return [];
+
+              const counted = Boolean(result?.counted);
+
+              return (
+                <tr
+                  key={race.raceId}
+                  className={counted ? "font-bold text-zinc-950" : "text-zinc-500"}
+                >
+                  <td className="px-4 py-2">{race.raceName}</td>
+                  <td className="px-4 py-2">{formatDate(race.raceDate)}</td>
+                  <td className="px-4 py-2">#{result.position}</td>
+                  <td className="px-4 py-2 text-purple-700">
+                    {result.points}
+                  </td>
+                  <td className="px-4 py-2">
+                    {counted ? (
+                      <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-bold text-purple-700">
+                        Retenue
+                      </span>
+                    ) : (
+                      <span className="text-xs font-medium text-zinc-400">
+                        Non retenue
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 

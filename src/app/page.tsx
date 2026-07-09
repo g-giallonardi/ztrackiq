@@ -50,11 +50,9 @@ function formatEntityValue(after: unknown, before: unknown) {
     return payload.nickname;
   }
 
-  const fullName = [payload.firstname, payload.lastname]
-    .filter((part): part is string => typeof part === "string" && Boolean(part))
-    .join(" ");
-
-  return fullName || "Élément modifié";
+  return typeof payload.firstname === "string" && payload.firstname
+    ? payload.firstname
+    : "Élément modifié";
 }
 
 function getActivityConfig(entity: string, action: string) {

@@ -9,9 +9,9 @@ model Pilot {
   firstname    String
   lastname     String?
   nickname     String?
-  email        String    @unique
-  passwordHash String    @default("sha256:e7cd9662965741e20f58915fb0eb0f52696c786c0529d02c316db538bd6ead99")
-  role         PilotRole @default(visiteur)
+  email        String?   @unique
+  passwordHash String?
+  role         PilotRole?
   phone        String?
   active       Boolean   @default(true)
 

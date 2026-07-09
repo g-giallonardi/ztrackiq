@@ -45,6 +45,9 @@ export async function login(
       "active"
     FROM "Pilot"
     WHERE LOWER("email") = ${email}
+      AND "email" IS NOT NULL
+      AND "passwordHash" IS NOT NULL
+      AND "role" IS NOT NULL
     LIMIT 1
   `;
 

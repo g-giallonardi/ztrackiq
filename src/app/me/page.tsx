@@ -55,19 +55,12 @@ type CarRow = {
   bestResult: number | null;
 };
 
-function formatPilotFullName(pilot: {
-  firstname: string;
-  lastname: string | null;
-}) {
-  return [pilot.firstname, pilot.lastname].filter(Boolean).join(" ");
-}
-
 function formatPilotDisplayName(pilot: {
   firstname: string;
   lastname: string | null;
   nickname: string | null;
 }) {
-  return pilot.nickname || formatPilotFullName(pilot);
+  return pilot.nickname || pilot.firstname;
 }
 
 function formatRole(role: string) {

@@ -11,15 +11,18 @@ type PilotActionRow = {
   firstname: string;
   lastname: string | null;
   nickname: string | null;
-  email: string;
-  passwordHash: string;
-  role: string;
+  email: string | null;
+  passwordHash: string | null;
+  role: string | null;
   phone: string | null;
   active: boolean;
   clubId: number | null;
   createdAt: Date;
   updatedAt: Date;
 };
+
+const DEFAULT_PASSWORD_HASH =
+  "sha256:e7cd9662965741e20f58915fb0eb0f52696c786c0529d02c316db538bd6ead99";
 
 export async function savePilot(formData: FormData) {
   await requireAdmin();
@@ -28,8 +31,8 @@ export async function savePilot(formData: FormData) {
   const firstname = requiredString(formData.get("firstname"));
   const lastname = optionalString(formData.get("lastname"));
   const nickname = emptyToNull(formData.get("nickname"));
-  const email = requiredString(formData.get("email"));
-  const role = requiredRole(formData.get("role"));
+  const role = optionalRole(formData.get("role"));
+  const email = role ? requiredString(formData.get("email")).toLowerCase() : null;
   const phone = emptyToNull(formData.get("phone"));
   const clubId = toNullableNumber(formData.get("clubId"));
   const active = formData.get("active") === "on";
@@ -46,9 +49,29 @@ export async function savePilot(formData: FormData) {
   };
 
   await prisma.$transaction(async (tx) => {
-    if (id) {
-      const pilotId = Number(id);
+    const pilotId = id ? Number(id) : null;
+    const [existingEmailOwner] = data.email
+      ? pilotId
+        ? await tx.$queryRaw<{ id: number }[]>`
+          SELECT "id"
+          FROM "Pilot"
+          WHERE lower("email") = lower(${data.email})
+            AND "id" <> ${pilotId}
+          LIMIT 1
+        `
+        : await tx.$queryRaw<{ id: number }[]>`
+          SELECT "id"
+          FROM "Pilot"
+          WHERE lower("email") = lower(${data.email})
+          LIMIT 1
+        `
+      : [];
 
+    if (existingEmailOwner) {
+      throw new Error("Cette adresse email est déjà utilisée");
+    }
+
+    if (pilotId) {
       const [before] = await tx.$queryRaw<PilotActionRow[]>`
         SELECT
           "id",
@@ -74,6 +97,10 @@ export async function savePilot(formData: FormData) {
           "lastname" = ${data.lastname},
           "nickname" = ${data.nickname},
           "email" = ${data.email},
+          "passwordHash" = CASE
+            WHEN ${data.role}::text IS NULL THEN NULL
+            ELSE COALESCE("passwordHash", ${DEFAULT_PASSWORD_HASH})
+          END,
           "role" = ${data.role}::"PilotRole",
           "phone" = ${data.phone},
           "clubId" = ${data.clubId},
@@ -111,6 +138,7 @@ export async function savePilot(formData: FormData) {
           "lastname",
           "nickname",
           "email",
+          "passwordHash",
           "role",
           "phone",
           "clubId",
@@ -123,6 +151,7 @@ export async function savePilot(formData: FormData) {
           ${data.lastname},
           ${data.nickname},
           ${data.email},
+          ${data.role ? DEFAULT_PASSWORD_HASH : null},
           ${data.role}::"PilotRole",
           ${data.phone},
           ${data.clubId},
@@ -221,8 +250,13 @@ function requiredString(value: FormDataEntryValue | null) {
   return trimmed;
 }
 
-function requiredRole(value: FormDataEntryValue | null) {
-  const role = requiredString(value);
+function optionalRole(value: FormDataEntryValue | null) {
+  const role = emptyToNull(value);
+
+  if (!role) {
+    return null;
+  }
+
   if (role !== "admin" && role !== "adherent" && role !== "visiteur") {
     throw new Error("Rôle invalide");
   }

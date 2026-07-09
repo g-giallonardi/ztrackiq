@@ -38,6 +38,8 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       "active"
     FROM "Pilot"
     WHERE "id" = ${session.userId}
+      AND "email" IS NOT NULL
+      AND "role" IS NOT NULL
   `;
 
   if (!pilot || !pilot.active) return null;

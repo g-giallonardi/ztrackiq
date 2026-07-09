@@ -12,7 +12,7 @@ function getDisplayName(user: {
 }) {
   if (user.nickname) return user.nickname;
 
-  return [user.firstname, user.lastname].filter(Boolean).join(" ");
+  return user.firstname;
 }
 
 function formatRole(role: string) {

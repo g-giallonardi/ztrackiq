@@ -5,6 +5,10 @@ import {
   DrawerCloseButton,
 } from "@/components/DismissibleDrawer";
 import { requireCurrentUser } from "@/lib/auth";
+import {
+  buildDuplicateFirstnameSet,
+  getPilotDisplayName,
+} from "@/lib/pilotDisplay";
 import { prisma } from "@/lib/prisma";
 import {
   CalendarDays,
@@ -133,18 +137,6 @@ function formatBestLapDiff(
   return `+${diffSeconds.toFixed(3)}`;
 }
 
-function getPilotFullName(pilot: { firstname: string; lastname: string | null }) {
-  return [pilot.firstname, pilot.lastname].filter(Boolean).join(" ");
-}
-
-function getPilotDisplayName(pilot: {
-  firstname: string;
-  lastname: string | null;
-  nickname: string | null;
-}) {
-  return pilot.nickname || getPilotFullName(pilot);
-}
-
 function getResultCar(
   result: { carId: number | null; pilotId: number },
   carById: Map<number, CarWithPiSpecs>,
@@ -193,7 +185,6 @@ export default async function RacesPage({
       ORDER BY "Race"."raceDate" DESC, "Race"."id" ASC
     `,
     prisma.pilot.findMany({
-      where: { active: true },
       orderBy: [{ lastname: "asc" }, { firstname: "asc" }],
     }),
     prisma.$queryRaw<TrackRow[]>`
@@ -244,7 +235,9 @@ export default async function RacesPage({
     ...race,
     results: resultsByRace.get(race.id) ?? [],
   }));
+  const activePilots = pilots.filter((pilot) => pilot.active);
   const pilotsById = new Map(pilots.map((pilot) => [pilot.id, pilot]));
+  const duplicateFirstnames = buildDuplicateFirstnameSet(pilots);
   const carById = new Map<number, CarWithPiSpecs>(
     cars.map((car) => [car.id, car]),
   );
@@ -352,7 +345,8 @@ export default async function RacesPage({
           key={`${drawerMode}-${selectedRaceId ?? "new"}`}
           mode={drawerMode}
           race={selectedRace}
-          pilots={pilots}
+          pilots={activePilots}
+          duplicateFirstnames={duplicateFirstnames}
           cars={cars}
           tracks={tracks}
           championships={championships}
@@ -364,6 +358,7 @@ export default async function RacesPage({
         <RaceResultsModal
           race={detailsRace}
           pilotsById={pilotsById}
+          duplicateFirstnames={duplicateFirstnames}
           carById={carById}
           carByPilotId={carByPilotId}
         />
@@ -374,6 +369,7 @@ export default async function RacesPage({
           date={sessionDate}
           races={sessionRaces}
           pilotsById={pilotsById}
+          duplicateFirstnames={duplicateFirstnames}
           carById={carById}
           carByPilotId={carByPilotId}
         />
@@ -414,6 +410,7 @@ function RaceDrawer({
   mode,
   race,
   pilots,
+  duplicateFirstnames,
   cars,
   tracks,
   championships,
@@ -443,6 +440,7 @@ function RaceDrawer({
     lastname: string | null;
     nickname: string | null;
   }[];
+  duplicateFirstnames: ReadonlySet<string>;
   cars: {
     id: number;
     name: string;
@@ -567,15 +565,16 @@ function RaceDrawer({
                 <RaceResultsFields
                   pilots={pilots.map((pilot) => ({
                     id: pilot.id,
-                    label: `${getPilotDisplayName(pilot)}${
-                      pilot.nickname ? ` - ${getPilotFullName(pilot)}` : ""
-                    }`,
+                    label: getPilotDisplayName(pilot, duplicateFirstnames),
                   }))}
                   cars={cars.map((car) => ({
                     id: car.id,
                     name: car.name,
                     pilotId: car.pilotId,
-                    pilotLabel: getPilotDisplayName(car.pilot),
+                    pilotLabel: getPilotDisplayName(
+                      car.pilot,
+                      duplicateFirstnames,
+                    ),
                   }))}
                   resultSlots={resultSlots}
                 />
@@ -661,6 +660,7 @@ function RaceSessionModal({
   date,
   races,
   pilotsById,
+  duplicateFirstnames,
   carById,
   carByPilotId,
 }: {
@@ -675,6 +675,7 @@ function RaceSessionModal({
       nickname: string | null;
     }
   >;
+  duplicateFirstnames: ReadonlySet<string>;
   carById: Map<number, CarWithPiSpecs>;
   carByPilotId: Map<number, CarWithPiSpecs>;
 }) {
@@ -738,7 +739,9 @@ function RaceSessionModal({
               label="Tours max."
               value={highestLaps === null ? "—" : String(highestLaps)}
               detail={
-                highestLapsPilot ? getPilotDisplayName(highestLapsPilot) : undefined
+                highestLapsPilot
+                  ? getPilotDisplayName(highestLapsPilot, duplicateFirstnames)
+                  : undefined
               }
             />
             <SessionStat
@@ -752,7 +755,10 @@ function RaceSessionModal({
               value={formatBestLap(sessionBestLap)}
               detail={
                 sessionBestLapPilot
-                  ? getPilotDisplayName(sessionBestLapPilot)
+                  ? getPilotDisplayName(
+                      sessionBestLapPilot,
+                      duplicateFirstnames,
+                    )
                   : undefined
               }
             />
@@ -847,7 +853,10 @@ function RaceSessionModal({
                                 {pilot ? (
                                   <div className="min-w-0">
                                     <p className="truncate font-semibold text-zinc-900">
-                                      {getPilotDisplayName(pilot)}
+                                      {getPilotDisplayName(
+                                        pilot,
+                                        duplicateFirstnames,
+                                      )}
                                     </p>
                                   </div>
                                 ) : (
@@ -978,6 +987,7 @@ function PiTag({
 function RaceResultsModal({
   race,
   pilotsById,
+  duplicateFirstnames,
   carById,
   carByPilotId,
 }: {
@@ -991,6 +1001,7 @@ function RaceResultsModal({
       nickname: string | null;
     }
   >;
+  duplicateFirstnames: ReadonlySet<string>;
   carById: Map<number, CarWithPiSpecs>;
   carByPilotId: Map<number, CarWithPiSpecs>;
 }) {
@@ -1082,7 +1093,10 @@ function RaceResultsModal({
                           {pilot ? (
                             <div className="min-w-0">
                               <p className="truncate font-semibold text-zinc-900">
-                                {getPilotDisplayName(pilot)}
+                                {getPilotDisplayName(
+                                  pilot,
+                                  duplicateFirstnames,
+                                )}
                               </p>
                             </div>
                           ) : (

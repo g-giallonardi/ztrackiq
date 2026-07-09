@@ -208,7 +208,7 @@ function getPilotDisplayName(pilot: {
   lastname: string | null;
   nickname: string | null;
 }) {
-  return pilot.nickname || [pilot.firstname, pilot.lastname].filter(Boolean).join(" ");
+  return pilot.nickname || pilot.firstname;
 }
 
 function toAuditJson(value: unknown): Prisma.InputJsonValue | undefined {

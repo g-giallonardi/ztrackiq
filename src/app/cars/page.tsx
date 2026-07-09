@@ -16,6 +16,10 @@ import {
   UserRoundCheck,
   Waypoints,
 } from "lucide-react";
+import {
+  buildDuplicateFirstnameSet,
+  getPilotDisplayName,
+} from "@/lib/pilotDisplay";
 import { deleteCar, saveCar } from "./actions";
 import { CarsTable, type CarTableRow } from "./CarsTable";
 
@@ -55,18 +59,6 @@ function normalizeSpecCategoryName(value: string) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
-}
-
-function getPilotFullName(pilot: { firstname: string; lastname: string | null }) {
-  return [pilot.firstname, pilot.lastname].filter(Boolean).join(" ");
-}
-
-function getPilotDisplayName(pilot: {
-  firstname: string;
-  lastname: string | null;
-  nickname: string | null;
-}) {
-  return pilot.nickname || getPilotFullName(pilot);
 }
 
 export default async function CarsPage({
@@ -127,6 +119,14 @@ export default async function CarsPage({
   const awdCount = cars.filter((car) => getCarSpecValue(car, "Transmission") === "AWD").length;
   const rwdCount = cars.filter((car) => getCarSpecValue(car, "Transmission") === "RWD").length;
   const fwdCount = cars.filter((car) => getCarSpecValue(car, "Transmission") === "FWD").length;
+  const displayPilots = [
+    ...new Map(
+      [...pilots, ...cars.flatMap((car) => (car.pilot ? [car.pilot] : []))].map(
+        (pilot) => [pilot.id, pilot],
+      ),
+    ).values(),
+  ];
+  const duplicateFirstnames = buildDuplicateFirstnameSet(displayPilots);
   const carTableRows: CarTableRow[] = cars.map((car) => {
     const energy = getCarSpecValue(car, [
       "Technologie énergie",
@@ -145,7 +145,9 @@ export default async function CarsPage({
       name: car.name,
       piClass: formatPiClass(piValue),
       piValue,
-      pilotName: car.pilot ? getPilotDisplayName(car.pilot) : "Aucun",
+      pilotName: car.pilot
+        ? getPilotDisplayName(car.pilot, duplicateFirstnames)
+        : "Aucun",
       transmission: getCarSpecValue(car, "Transmission"),
       energy,
       chipId: car.chipId,
@@ -215,6 +217,7 @@ export default async function CarsPage({
           mode={drawerMode}
           car={selectedCar}
           pilots={pilots}
+          duplicateFirstnames={duplicateFirstnames}
           specCategories={specCategories}
           showDeleteModal={isDeleteModalOpen}
         />
@@ -255,6 +258,7 @@ function CarDrawer({
   mode,
   car,
   pilots,
+  duplicateFirstnames,
   specCategories,
   showDeleteModal,
 }: {
@@ -284,6 +288,7 @@ function CarDrawer({
     lastname: string | null;
     nickname: string | null;
   }[];
+  duplicateFirstnames: ReadonlySet<string>;
   specCategories: {
     id: number;
     name: string;
@@ -408,8 +413,7 @@ function CarDrawer({
                 <option value="">Aucun pilote</option>
                 {pilots.map((pilot) => (
                   <option key={pilot.id} value={pilot.id}>
-                    {getPilotDisplayName(pilot)}
-                    {pilot.nickname ? ` — ${getPilotFullName(pilot)}` : ""}
+                    {getPilotDisplayName(pilot, duplicateFirstnames)}
                   </option>
                 ))}
               </select>

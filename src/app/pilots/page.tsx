@@ -5,6 +5,10 @@ import {
   DrawerCloseButton,
 } from "@/components/DismissibleDrawer";
 import { requireCurrentUser } from "@/lib/auth";
+import {
+  buildDuplicateFirstnameSet,
+  getPilotDisplayName as getShortPilotDisplayName,
+} from "@/lib/pilotDisplay";
 import { prisma } from "@/lib/prisma";
 import {
   Activity,
@@ -19,6 +23,7 @@ import {
   Users,
 } from "lucide-react";
 import { deletePilot, savePilot } from "./actions";
+import { PilotEmailField } from "./PilotEmailField";
 import { PilotsTable, type PilotTableRow } from "./PilotsTable";
 
 type PilotStats = {
@@ -60,14 +65,6 @@ function getPilotFullName(pilot: { firstname: string; lastname: string | null })
   return [pilot.firstname, pilot.lastname].filter(Boolean).join(" ");
 }
 
-function getPilotDisplayName(pilot: {
-  firstname: string;
-  lastname: string | null;
-  nickname: string | null;
-}) {
-  return pilot.nickname || getPilotFullName(pilot);
-}
-
 function formatDate(date: Date) {
   return new Intl.DateTimeFormat("fr-FR", {
     day: "2-digit",
@@ -92,15 +89,17 @@ function readNumber(value: number | bigint | null | undefined) {
   return Number(value ?? 0);
 }
 
-function formatPilotRole(role: string) {
+function formatPilotRole(role: string | null | undefined) {
   return role === "admin"
     ? "Admin"
     : role === "adherent"
       ? "Adhérent"
-      : "Visiteur";
+      : role === "visiteur"
+        ? "Visiteur"
+        : "Aucun rôle";
 }
 
-function getPilotRoleClassName(role: string) {
+function getPilotRoleClassName(role: string | null | undefined) {
   return role === "admin"
     ? "bg-purple-100 text-purple-700 ring-purple-600/20"
     : role === "adherent"
@@ -140,6 +139,7 @@ export default async function PilotsPage({
 
   const activeCount = pilots.filter((p) => p.active).length;
   const inactiveCount = pilots.filter((p) => !p.active).length;
+  const duplicateFirstnames = buildDuplicateFirstnameSet(pilots);
   const pilotTableRows: PilotTableRow[] = pilots.map((pilot) => {
     const fullName = getPilotFullName(pilot);
 
@@ -152,7 +152,7 @@ export default async function PilotsPage({
       initials: `${pilot.firstname[0] ?? ""}${pilot.lastname?.[0] ?? ""}`,
       active: pilot.active,
       statusLabel: pilot.active ? "Actif" : "Inactif",
-      role: pilot.role,
+      role: pilot.role ?? "",
       roleLabel: formatPilotRole(pilot.role),
       clubName: pilot.club?.name ?? "Aucun",
       carName: pilot.cars[0]?.name ?? "—",
@@ -233,12 +233,20 @@ export default async function PilotsPage({
           mode={drawerMode}
           pilot={selectedPilot}
           clubs={clubs}
+          existingEmails={pilots.flatMap((pilot) =>
+            pilot.email ? [{ id: pilot.id, email: pilot.email }] : [],
+          )}
+          duplicateFirstnames={duplicateFirstnames}
           showDeleteModal={isDeleteModalOpen}
         />
       )}
 
       {detailsPilot && detailsData && (
-        <PilotDetailsModal pilot={detailsPilot} details={detailsData} />
+        <PilotDetailsModal
+          pilot={detailsPilot}
+          details={detailsData}
+          duplicateFirstnames={duplicateFirstnames}
+        />
       )}
     </div>
   );
@@ -302,20 +310,22 @@ async function getPilotDetailsData(pilotId: number): Promise<PilotDetailsData> {
 function PilotDetailsModal({
   pilot,
   details,
+  duplicateFirstnames,
 }: {
   pilot: {
     id: number;
     firstname: string;
     lastname: string | null;
     nickname: string | null;
-    email: string;
-    role: string;
+    email: string | null;
+    role: string | null;
     phone: string | null;
     active: boolean;
     createdAt: Date;
     club: { name: string } | null;
   };
   details: PilotDetailsData;
+  duplicateFirstnames: ReadonlySet<string>;
 }) {
   const stats = details.stats;
   const races = readNumber(stats?.races);
@@ -334,7 +344,7 @@ function PilotDetailsModal({
               Fiche pilote
             </p>
             <h3 className="mt-1 text-3xl font-black text-zinc-900">
-              {getPilotDisplayName(pilot)}
+              {getShortPilotDisplayName(pilot, duplicateFirstnames)}
             </h3>
             <p className="mt-1 text-sm text-zinc-500">
               {formatPilotRole(pilot.role)}
@@ -575,6 +585,8 @@ function PilotDrawer({
   mode,
   pilot,
   clubs,
+  existingEmails,
+  duplicateFirstnames,
   showDeleteModal,
 }: {
   mode: string | undefined;
@@ -583,8 +595,8 @@ function PilotDrawer({
     firstname: string;
     lastname: string | null;
     nickname: string | null;
-    email: string;
-    role: string;
+    email: string | null;
+    role: string | null;
     phone: string | null;
     active: boolean;
     clubId: number | null;
@@ -594,6 +606,11 @@ function PilotDrawer({
     name: string;
     default: string | null;
   }[];
+  existingEmails: {
+    id: number;
+    email: string;
+  }[];
+  duplicateFirstnames: ReadonlySet<string>;
   showDeleteModal: boolean;
 }) {
   const isEdit = mode === "edit";
@@ -656,12 +673,11 @@ function PilotDrawer({
               defaultValue={pilot?.nickname ?? undefined}
             />
 
-            <PilotField
-              label="Email"
-              name="email"
-              type="email"
+            <PilotEmailField
               defaultValue={pilot?.email ?? undefined}
-              required
+              defaultRole={pilot?.role}
+              currentPilotId={pilot?.id}
+              existingEmails={existingEmails}
             />
 
             <PilotField
@@ -676,9 +692,10 @@ function PilotDrawer({
               </span>
               <select
                 name="role"
-                defaultValue={pilot?.role ?? "visiteur"}
+                defaultValue={pilot?.role ?? ""}
                 className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-zinc-900 outline-none transition focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20"
               >
+                <option value="">Aucun rôle</option>
                 <option value="admin">Admin</option>
                 <option value="adherent">Adhérent</option>
                 <option value="visiteur">Visiteur</option>
@@ -754,7 +771,12 @@ function PilotDrawer({
         )}
       </aside>
 
-      {showDeleteModal && pilot && <DeletePilotModal pilot={pilot} />}
+      {showDeleteModal && pilot && (
+        <DeletePilotModal
+          pilot={pilot}
+          duplicateFirstnames={duplicateFirstnames}
+        />
+      )}
     </div>
     </DismissibleDrawer>
   );
@@ -792,6 +814,7 @@ function PilotField({
 
 function DeletePilotModal({
   pilot,
+  duplicateFirstnames,
 }: {
   pilot: {
     id: number;
@@ -799,6 +822,7 @@ function DeletePilotModal({
     lastname: string | null;
     nickname: string | null;
   };
+  duplicateFirstnames: ReadonlySet<string>;
 }) {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
@@ -812,7 +836,7 @@ function DeletePilotModal({
         <p className="mt-3 text-sm text-zinc-600">
           Tu vas supprimer définitivement le pilote{" "}
           <span className="font-semibold text-zinc-900">
-            {getPilotDisplayName(pilot)}
+            {getShortPilotDisplayName(pilot, duplicateFirstnames)}
           </span>
           . Cette action sera enregistrée dans les logs.
         </p>
