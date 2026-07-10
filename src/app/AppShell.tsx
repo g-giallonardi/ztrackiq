@@ -74,18 +74,25 @@ function Navigation({ onNavigate }: { onNavigate?: () => void }) {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [pendingUrl, setPendingUrl] = useState<string | null>(null);
+  const [pendingNavigation, setPendingNavigation] = useState<{
+    from: string;
+    to: string;
+  } | null>(null);
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const search = searchParams.toString();
   const currentUrl = `${pathname}${search ? `?${search}` : ""}`;
-  const navigationPending = Boolean(pendingUrl && pendingUrl !== currentUrl);
+  const navigationPending = Boolean(
+    pendingNavigation &&
+      pendingNavigation.from === currentUrl &&
+      pendingNavigation.to !== currentUrl,
+  );
 
   useEffect(() => {
     if (!navigationPending) return;
 
     const timeout = window.setTimeout(() => {
-      setPendingUrl(null);
+      setPendingNavigation(null);
     }, 12000);
 
     return () => window.clearTimeout(timeout);
@@ -119,7 +126,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    setPendingUrl(`${destination.pathname}${destination.search}`);
+    if (
+      destination.pathname !== "/championships" ||
+      !destination.searchParams.has("detailsChampionshipId") ||
+      !destination.searchParams.has("championshipPilotId")
+    ) {
+      return;
+    }
+
+    setPendingNavigation({
+      from: currentUrl,
+      to: `${destination.pathname}${destination.search}`,
+    });
   }
 
   return (
@@ -204,9 +222,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-xl border border-white/10 bg-white p-5 text-center text-zinc-900 shadow-2xl">
             <div className="mx-auto mb-3 h-9 w-9 animate-spin rounded-full border-4 border-zinc-200 border-t-pink-500" />
-            <p className="text-base font-black">Chargement en cours</p>
+            <p className="text-base font-black">Détail du pilote</p>
             <p className="mt-1 text-sm font-medium text-zinc-500">
-              On récupère les données, merci de patienter.
+              On prépare ses courses et ses points du championnat.
             </p>
           </div>
         </div>

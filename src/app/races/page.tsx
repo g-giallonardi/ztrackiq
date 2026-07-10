@@ -267,6 +267,12 @@ export default async function RacesPage({
   const upcomingCount = races.filter(
     (race) => race.raceDate >= today,
   ).length;
+  const defaultRaceDate = formatRaceDateForInput(new Date());
+  const defaultRaceName = `Course ${
+    races.filter(
+      (race) => formatRaceDateForInput(race.raceDate) === defaultRaceDate,
+    ).length + 1
+  }`;
 
   const drawerMode = params?.drawer;
   const selectedRaceId = params?.raceId ? Number(params.raceId) : null;
@@ -345,6 +351,8 @@ export default async function RacesPage({
           key={`${drawerMode}-${selectedRaceId ?? "new"}`}
           mode={drawerMode}
           race={selectedRace}
+          defaultRaceDate={defaultRaceDate}
+          defaultRaceName={defaultRaceName}
           pilots={activePilots}
           duplicateFirstnames={duplicateFirstnames}
           cars={cars}
@@ -409,6 +417,8 @@ function QuickViewCard({
 function RaceDrawer({
   mode,
   race,
+  defaultRaceDate,
+  defaultRaceName,
   pilots,
   duplicateFirstnames,
   cars,
@@ -417,6 +427,8 @@ function RaceDrawer({
   showDeleteModal,
 }: {
   mode: string | undefined;
+  defaultRaceDate: string;
+  defaultRaceName: string;
   race?: {
     id: number;
     name: string;
@@ -504,11 +516,16 @@ function RaceDrawer({
           </div>
         ) : (
           <form action={saveRace} className="space-y-5">
-            <RaceField label="Nom" name="name" defaultValue={race?.name} required />
+            <RaceField
+              label="Nom"
+              name="name"
+              defaultValue={race?.name ?? defaultRaceName}
+              required
+            />
 
             <RaceChampionshipFields
               defaultRaceDate={
-                race ? formatRaceDateForInput(race.raceDate) : undefined
+                race ? formatRaceDateForInput(race.raceDate) : defaultRaceDate
               }
               defaultChampionshipId={race?.championshipId ?? null}
               championships={championships.map((championship) => ({

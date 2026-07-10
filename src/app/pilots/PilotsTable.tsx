@@ -162,10 +162,11 @@ export function PilotsTable({
                 className="font-semibold text-zinc-900 transition hover:text-pink-600 "
               >
                 {row.original.firstname}
-              
-                <p className="font-semibold uppercase text-zinc-900 transition  hover:text-pink-600 ">
-                  {row.original.lastname || "—"}
-                </p>
+                {row.original.lastname && 
+                  <p className="font-semibold uppercase text-zinc-900 transition  hover:text-pink-600 ">
+                    {row.original.lastname || "—"}
+                  </p>
+                }
               </Link>
             </div>
           </div>
