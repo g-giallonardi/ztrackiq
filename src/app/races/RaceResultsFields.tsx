@@ -179,8 +179,11 @@ export function RaceResultsFields({
                     Meilleur temps
                   </span>
                   <input
-                    type="text"
+                    type="number"
                     name={`bestLap_${position}`}
+                    min="0"
+                    step="0.001"
+                    inputMode="decimal"
                     defaultValue={result?.bestLap || undefined}
                     placeholder="12.345"
                     className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20"
