@@ -168,7 +168,9 @@ export function RaceResultsFields({
                   <input
                     type="number"
                     name={`laps_${position}`}
-                    min="0"
+                    min="1"
+                    step="1"
+                    inputMode="numeric"
                     defaultValue={result?.laps ?? undefined}
                     className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-zinc-900 outline-none transition focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20"
                   />

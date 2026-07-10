@@ -33,6 +33,12 @@ function nullableNumber(value: FormDataEntryValue | null) {
   return num;
 }
 
+function nullablePositiveInteger(value: FormDataEntryValue | null) {
+  const num = nullableNumber(value);
+
+  return num !== null && Number.isInteger(num) && num > 0 ? num : null;
+}
+
 function requiredString(value: FormDataEntryValue | null, field: string) {
   const str = value?.toString().trim();
 
@@ -81,7 +87,7 @@ function getRaceResults(formData: FormData) {
     .map((position) => {
       const pilotId = nullableNumber(formData.get(`pilot_${position}`));
       const carId = nullableNumber(formData.get(`car_${position}`));
-      const laps = nullableNumber(formData.get(`laps_${position}`));
+      const laps = nullablePositiveInteger(formData.get(`laps_${position}`));
       const bestLapMs = parseBestLapMs(formData.get(`bestLap_${position}`));
 
       return { position, pilotId, carId, laps, bestLapMs };

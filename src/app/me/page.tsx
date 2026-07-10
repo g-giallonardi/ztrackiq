@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { requireCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { SubmitButton } from "@/components/SubmitButton";
 import { changeMyPassword, updateMyProfile } from "./actions";
 
 type PilotProfile = {
@@ -411,13 +412,10 @@ export default async function MePage({
                 </select>
               </label>
 
-              <button
-                type="submit"
-                className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-gradient-to-r from-pink-500 to-yellow-400 px-4 py-2 font-black uppercase text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-              >
+              <SubmitButton className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-gradient-to-r from-pink-500 to-yellow-400 px-4 py-2 font-black uppercase text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md disabled:cursor-wait disabled:opacity-75 disabled:hover:translate-y-0">
                 <Save size="18" />
                 Enregistrer
-              </button>
+              </SubmitButton>
             </form>
           </section>
 
@@ -452,13 +450,13 @@ export default async function MePage({
                 required
               />
 
-              <button
-                type="submit"
-                className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-purple-600 px-4 py-2 font-black uppercase text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-purple-700 hover:shadow-md"
+              <SubmitButton
+                pendingLabel="Changement..."
+                className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-purple-600 px-4 py-2 font-black uppercase text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-purple-700 hover:shadow-md disabled:cursor-wait disabled:opacity-75 disabled:hover:translate-y-0"
               >
                 <LockKeyhole size="18" />
                 Changer le mot de passe
-              </button>
+              </SubmitButton>
             </form>
           </section>
         </div>

@@ -6,6 +6,7 @@ import {
   DismissibleDrawer,
   DrawerCloseButton,
 } from "@/components/DismissibleDrawer";
+import { SubmitButton } from "@/components/SubmitButton";
 import { requireCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
@@ -409,12 +410,9 @@ function SpecDrawer({
                 >
                   Annuler
                 </Link>
-                <button
-                  type="submit"
-                  className="rounded-md bg-gradient-to-r from-pink-500 to-yellow-400 px-4 py-2 font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-                >
+                <SubmitButton>
                   {isEdit ? "Enregistrer" : "Créer l'amélioration"}
-                </button>
+                </SubmitButton>
               </div>
             </div>
           </form>

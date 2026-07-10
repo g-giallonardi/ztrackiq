@@ -5,6 +5,7 @@ import {
   DismissibleDrawer,
   DrawerCloseButton,
 } from "@/components/DismissibleDrawer";
+import { SubmitButton } from "@/components/SubmitButton";
 import { requireCurrentUser } from "@/lib/auth";
 import {
   buildDuplicateFirstnameSet,
@@ -1052,12 +1053,9 @@ function ChampionshipDrawer({
                 >
                   Annuler
                 </Link>
-                <button
-                  type="submit"
-                  className="rounded-md bg-purple-600 px-4 py-2 font-semibold text-white transition hover:bg-purple-700"
-                >
+                <SubmitButton className="rounded-md bg-purple-600 px-4 py-2 font-semibold text-white transition hover:bg-purple-700 disabled:cursor-wait disabled:opacity-75">
                   Enregistrer
-                </button>
+                </SubmitButton>
               </div>
             </div>
           </form>
