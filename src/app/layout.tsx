@@ -1,5 +1,4 @@
 // src/app/layout.tsx
-import { Roboto } from "next/font/google";
 import "./globals.css";
 import { AuthStoreProvider } from "./AuthStoreProvider";
 import { AppShell } from "./AppShell";
@@ -11,11 +10,6 @@ export const metadata = {
   description: "Mini-Z Race Control",
 };
 
-const roboto = Roboto({
-  subsets: ["latin"],
-  weight: ["100", "300", "400", "500", "700", "900"],
-});
-
 export default async function RootLayout({
   children,
 }: {
@@ -26,7 +20,7 @@ export default async function RootLayout({
   return (
     <html lang="fr">
       <body
-        className={`${roboto.className} min-h-screen text-white`}
+        className="min-h-screen text-white"
         style={{ backgroundColor: theme.app.bg }}
       >
         <AuthStoreProvider initialUser={currentUser}>
