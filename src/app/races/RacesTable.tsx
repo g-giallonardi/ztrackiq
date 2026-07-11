@@ -250,8 +250,8 @@ export function RacesTable({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-row flex-wrap items-end gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
-        <label className="block">
+      <div className="flex flex-col items-stretch gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 sm:flex-row sm:flex-wrap sm:items-end">
+        <label className="block sm:w-auto">
           <span className="mb-1.5 block text-sm font-semibold text-zinc-700">
             Recherche
           </span>
@@ -260,7 +260,7 @@ export function RacesTable({
             value={globalFilter}
             onChange={(event) => setGlobalFilter(event.currentTarget.value)}
             placeholder="Course, circuit, note..."
-            className="min-w-72 rounded-md border border-zinc-200 bg-white px-3 py-2 text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20"
+            className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 sm:min-w-72"
           />
         </label>
 
@@ -276,7 +276,81 @@ export function RacesTable({
         </button>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
+      <div className="space-y-3 md:hidden">
+        {table.getRowModel().rows.map((row) => {
+          const race = row.original;
+
+          return (
+            <div
+              key={row.id}
+              className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-pink-100 text-pink-600">
+                    <Trophy size="20" />
+                  </div>
+                  <div className="min-w-0">
+                    <Link
+                      href={`/races?detailsRaceId=${race.id}`}
+                      className="block truncate font-black text-zinc-900 transition hover:text-pink-600 hover:underline"
+                    >
+                      {race.name}
+                    </Link>
+                    <Link
+                      href={`/races?sessionDate=${race.raceDate}`}
+                      className="mt-0.5 block text-sm font-semibold text-zinc-600 transition hover:text-pink-600 hover:underline"
+                    >
+                      {race.raceDateLabel}
+                    </Link>
+                    {race.notes && (
+                      <p className="mt-1 line-clamp-2 text-sm text-zinc-500">
+                        {race.notes}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {canManage && (
+                  <Link
+                    href={`/races?drawer=edit&raceId=${race.id}`}
+                    className="inline-flex shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 transition hover:border-cyan-500 hover:text-cyan-600"
+                    aria-label={`Modifier ${race.name}`}
+                  >
+                    <Pencil size="16" />
+                  </Link>
+                )}
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-600 ring-1 ring-inset ring-zinc-500/20">
+                  <MapPin size="13" />
+                  {race.trackName ?? "Circuit inconnu"}
+                </span>
+                {race.championshipName && (
+                  <span className="inline-flex items-center rounded-full bg-purple-50 px-3 py-1 text-xs font-semibold text-purple-700 ring-1 ring-inset ring-purple-600/20">
+                    {race.championshipName}
+                  </span>
+                )}
+                <span className="inline-flex items-center rounded-full bg-cyan-50 px-3 py-1 text-xs font-semibold text-cyan-700 ring-1 ring-inset ring-cyan-600/20">
+                  {race.pilotCount} pilote{race.pilotCount > 1 ? "s" : ""}
+                </span>
+                <span className="inline-flex items-center rounded-full bg-pink-50 px-3 py-1 text-xs font-semibold text-pink-700 ring-1 ring-inset ring-pink-600/20">
+                  {race.bestLap}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+
+        {table.getRowModel().rows.length === 0 && (
+          <div className="rounded-xl border border-zinc-200 bg-white px-5 py-10 text-center text-zinc-500">
+            Aucune course ne correspond aux filtres.
+          </div>
+        )}
+      </div>
+
+      <div className="hidden overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm md:block">
         <table className="w-full text-left text-sm">
           <thead className="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
             {table.getHeaderGroups().map((headerGroup) => (
@@ -351,7 +425,7 @@ export function RacesTable({
           {table.getFilteredRowModel().rows.length > 1 ? "s" : ""}
         </p>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => table.previousPage()}
