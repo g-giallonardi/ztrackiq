@@ -86,7 +86,10 @@ export function RaceChampionshipFields({
           name="championshipId"
           value={hasSelectedChampionship ? championshipId : ""}
           disabled={!raceDate}
-          onChange={(event) => setChampionshipId(event.currentTarget.value)}
+          onChange={(event) => {
+            const nextChampionshipId = event.currentTarget?.value ?? "";
+            setChampionshipId(nextChampionshipId);
+          }}
           className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-zinc-900 outline-none transition disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20"
         >
           <option value="">Aucun championnat</option>

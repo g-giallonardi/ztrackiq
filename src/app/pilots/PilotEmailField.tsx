@@ -32,7 +32,12 @@ export function PilotEmailField({
   );
 
   const validateEmail = useCallback(
-    (input: HTMLInputElement) => {
+    (input: HTMLInputElement | null) => {
+      if (!input) {
+        setMessage("");
+        return;
+      }
+
       const email = input.value.trim().toLowerCase();
       const nextMessage =
         email && existingEmailSet.has(email)
@@ -54,7 +59,7 @@ export function PilotEmailField({
     }
 
     const syncRequiredState = () => {
-      const hasRole = Boolean(roleField.value);
+      const hasRole = Boolean(roleField?.value);
 
       setRoleSelected(hasRole);
       input.required = hasRole;

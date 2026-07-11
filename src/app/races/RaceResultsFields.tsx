@@ -101,8 +101,9 @@ export function RaceResultsFields({
                     name={`pilot_${position}`}
                     value={selectedPilotId ?? ""}
                     onChange={(event) => {
-                      const nextPilotId = event.currentTarget.value
-                        ? Number(event.currentTarget.value)
+                      const nextValue = event.currentTarget?.value ?? "";
+                      const nextPilotId = nextValue
+                        ? Number(nextValue)
                         : null;
                       const currentCar = cars.find(
                         (car) => car.id === selectedCarIds[position],
@@ -140,14 +141,15 @@ export function RaceResultsFields({
                     name={`car_${position}`}
                     value={selectedCarId ?? ""}
                     disabled={!selectedPilotId || cars.length === 0}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const nextValue = event.currentTarget?.value ?? "";
                       setSelectedCarIds((current) => ({
                         ...current,
-                        [position]: event.currentTarget.value
-                          ? Number(event.currentTarget.value)
+                        [position]: nextValue
+                          ? Number(nextValue)
                           : null,
-                      }))
-                    }
+                      }));
+                    }}
                     className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-zinc-900 outline-none transition disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20"
                   >
                     <option value="">Aucune voiture</option>
