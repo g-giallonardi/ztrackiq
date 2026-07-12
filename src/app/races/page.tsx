@@ -722,13 +722,13 @@ function RaceSessionModal({
         );
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-2 backdrop-blur-sm sm:p-4">
       <Link href="/races" className="absolute inset-0" aria-label="Fermer" />
 
       <div className="relative w-full max-w-[92rem] overflow-hidden rounded-2xl bg-white shadow-2xl">
-        <div className="flex items-start justify-between gap-4 border-b border-zinc-100 p-6">
+        <div className="flex items-start justify-between gap-4 border-b border-zinc-100 p-4 sm:p-6">
           <div>
-            <h3 className="flex items-center gap-2 text-2xl font-black text-pink-500">
+            <h3 className="flex items-center gap-2 text-xl font-black text-pink-500 sm:text-2xl">
               <span className="flex h-9 w-9 items-center justify-center rounded-md bg-pink-100 text-pink-600">
                 <CalendarDays size="20" />
               </span>
@@ -744,7 +744,7 @@ function RaceSessionModal({
           </Link>
         </div>
 
-        <div className="max-h-[78vh] overflow-y-auto p-6">
+        <div className="max-h-[78vh] overflow-y-auto p-3 sm:p-6">
           <div className="mb-3 grid grid-cols-2 gap-2 lg:grid-cols-4">
             <SessionStat
               label="Tours moyens"
@@ -824,26 +824,8 @@ function RaceSessionModal({
                       Aucun résultat enregistré pour cette course.
                     </div>
                   ) : (
-                    <table className="w-full table-fixed text-left text-xs">
-                      <colgroup>
-                        <col className="w-[12%]" />
-                        <col className="w-[32%]" />
-                        <col className="w-[16%]" />
-                        <col className="w-[14%]" />
-                        <col className="w-[26%]" />
-                      </colgroup>
-                      <thead className="bg-white text-xs uppercase tracking-wide text-zinc-500">
-                        <tr>
-                          <th className="px-3 py-2 font-semibold">Place</th>
-                          <th className="px-3 py-2 font-semibold">Pilote</th>
-                          <th className="px-3 py-2 font-semibold">Classe</th>
-                          <th className="px-3 py-2 font-semibold">Tours</th>
-                          <th className="px-3 py-2 font-semibold">
-                            Meilleur temps
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-zinc-100">
+                    <>
+                      <div className="space-y-2 p-3 sm:hidden">
                         {sortedResults.map((result) => {
                           const pilot = pilotsById.get(result.pilotId);
                           const car = getResultCar(
@@ -860,64 +842,124 @@ function RaceSessionModal({
                             result.bestLapMs < averageBestLap;
 
                           return (
-                            <tr key={result.id}>
-                              <td className="px-3 py-2 font-semibold text-zinc-900">
-                                #{result.position}
-                              </td>
-                              <td className="px-3 py-2">
-                                {pilot ? (
-                                  <div className="min-w-0">
-                                    <p className="truncate font-semibold text-zinc-900">
-                                      {getPilotDisplayName(
-                                        pilot,
-                                        duplicateFirstnames,
-                                      )}
-                                    </p>
-                                  </div>
-                                ) : (
-                                  <span className="text-zinc-500">
-                                    Pilote supprimé
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-3 py-2">
-                                {car ? (
-                                  <PiTag
-                                    piClass={formatPiClass(getCarTotalPi(car))}
-                                    piValue={getCarTotalPi(car)}
-                                    compact
-                                  />
-                                ) : (
-                                  <span className="text-zinc-400">—</span>
-                                )}
-                              </td>
-                              <td className="px-3 py-2 text-zinc-600">
-                                {result.laps ?? "—"}
-                              </td>
-                              <td
-                                className={`px-3 py-2 ${
-                                  isBestLap
-                                    ? "font-bold text-green-600"
-                                    : isUnderSessionAverage
-                                      ? "font-bold text-zinc-900"
-                                    : "text-zinc-600"
-                                }`}
-                              >
-                                {formatBestLap(result.bestLapMs)}
-                                {result.bestLapMs && raceBestLap && !isBestLap && (
-                                  <span className="ml-2 text-xs font-semibold text-zinc-500">
-                                    {formatBestLapDiff(
-                                      result.bestLapMs,
-                                      raceBestLap,
-                                    )}
-                                  </span>
-                                )}
-                              </td>
-                            </tr>
+                            <ResultMobileCard
+                              key={result.id}
+                              position={result.position}
+                              pilotName={
+                                pilot
+                                  ? getPilotDisplayName(
+                                      pilot,
+                                      duplicateFirstnames,
+                                    )
+                                  : "Pilote supprimé"
+                              }
+                              car={car}
+                              laps={result.laps}
+                              bestLapMs={result.bestLapMs}
+                              raceBestLap={raceBestLap}
+                              highlightUnderAverage={isUnderSessionAverage}
+                            />
                           );
                         })}
-                      </tbody>
-                    </table>
+                      </div>
+
+                      <table className="hidden w-full table-fixed text-left text-xs sm:table">
+                        <colgroup>
+                          <col className="w-[12%]" />
+                          <col className="w-[32%]" />
+                          <col className="w-[16%]" />
+                          <col className="w-[14%]" />
+                          <col className="w-[26%]" />
+                        </colgroup>
+                        <thead className="bg-white text-xs uppercase tracking-wide text-zinc-500">
+                          <tr>
+                            <th className="px-3 py-2 font-semibold">Place</th>
+                            <th className="px-3 py-2 font-semibold">Pilote</th>
+                            <th className="px-3 py-2 font-semibold">Classe</th>
+                            <th className="px-3 py-2 font-semibold">Tours</th>
+                            <th className="px-3 py-2 font-semibold">
+                              Meilleur temps
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-100">
+                          {sortedResults.map((result) => {
+                            const pilot = pilotsById.get(result.pilotId);
+                            const car = getResultCar(
+                              result,
+                              carById,
+                              carByPilotId,
+                            );
+                            const isBestLap =
+                              result.bestLapMs !== null &&
+                              result.bestLapMs === raceBestLap;
+                            const isUnderSessionAverage =
+                              result.bestLapMs !== null &&
+                              averageBestLap !== null &&
+                              result.bestLapMs < averageBestLap;
+
+                            return (
+                              <tr key={result.id}>
+                                <td className="px-3 py-2 font-semibold text-zinc-900">
+                                  #{result.position}
+                                </td>
+                                <td className="px-3 py-2">
+                                  {pilot ? (
+                                    <div className="min-w-0">
+                                      <p className="truncate font-semibold text-zinc-900">
+                                        {getPilotDisplayName(
+                                          pilot,
+                                          duplicateFirstnames,
+                                        )}
+                                      </p>
+                                    </div>
+                                  ) : (
+                                    <span className="text-zinc-500">
+                                      Pilote supprimé
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2">
+                                  {car ? (
+                                    <PiTag
+                                      piClass={formatPiClass(getCarTotalPi(car))}
+                                      piValue={getCarTotalPi(car)}
+                                      compact
+                                    />
+                                  ) : (
+                                    <span className="text-zinc-400">—</span>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 text-zinc-600">
+                                  {result.laps ?? "—"}
+                                </td>
+                                <td
+                                  className={`px-3 py-2 ${
+                                    isBestLap
+                                      ? "font-bold text-green-600"
+                                      : isUnderSessionAverage
+                                        ? "font-bold text-zinc-900"
+                                      : "text-zinc-600"
+                                  }`}
+                                >
+                                  {formatBestLap(result.bestLapMs)}
+                                  {result.bestLapMs &&
+                                    raceBestLap &&
+                                    !isBestLap && (
+                                      <span className="ml-2 text-xs font-semibold text-zinc-500">
+                                        {formatBestLapDiff(
+                                          result.bestLapMs,
+                                          raceBestLap,
+                                        )}
+                                      </span>
+                                    )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </>
                   )}
                 </section>
               );
@@ -999,6 +1041,76 @@ function PiTag({
   );
 }
 
+function ResultMobileCard({
+  position,
+  pilotName,
+  car,
+  laps,
+  bestLapMs,
+  raceBestLap,
+  highlightUnderAverage = false,
+}: {
+  position: number;
+  pilotName: string;
+  car: CarWithPiSpecs | undefined;
+  laps: number | null;
+  bestLapMs: number | null;
+  raceBestLap: number | null;
+  highlightUnderAverage?: boolean;
+}) {
+  const isBestLap = bestLapMs !== null && bestLapMs === raceBestLap;
+
+  return (
+    <div className="rounded-lg border border-zinc-200 bg-white p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold text-zinc-500">#{position}</p>
+          <p className="truncate font-bold text-zinc-900">{pilotName}</p>
+        </div>
+        {car ? (
+          <PiTag
+            piClass={formatPiClass(getCarTotalPi(car))}
+            piValue={getCarTotalPi(car)}
+            compact
+          />
+        ) : (
+          <span className="text-sm text-zinc-400">—</span>
+        )}
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+        <div className="rounded-md bg-zinc-50 px-3 py-2">
+          <p className="text-[10px] font-semibold uppercase text-zinc-500">
+            Tours
+          </p>
+          <p className="font-bold text-zinc-900">{laps ?? "—"}</p>
+        </div>
+        <div className="rounded-md bg-zinc-50 px-3 py-2">
+          <p className="text-[10px] font-semibold uppercase text-zinc-500">
+            Meilleur temps
+          </p>
+          <p
+            className={
+              isBestLap
+                ? "font-bold text-green-600"
+                : highlightUnderAverage
+                  ? "font-bold text-zinc-900"
+                  : "font-semibold text-zinc-700"
+            }
+          >
+            {formatBestLap(bestLapMs)}
+            {bestLapMs && raceBestLap && !isBestLap && (
+              <span className="ml-1 text-xs font-semibold text-zinc-500">
+                {formatBestLapDiff(bestLapMs, raceBestLap)}
+              </span>
+            )}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function RaceResultsModal({
   race,
   pilotsById,
@@ -1026,16 +1138,16 @@ function RaceResultsModal({
   const raceBestLap = getRaceBestLap(sortedResults);
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-2 backdrop-blur-sm sm:p-4">
       <Link href="/races" className="absolute inset-0" aria-label="Fermer" />
 
       <div className="relative w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl">
-        <div className="flex items-start justify-between gap-4 border-b border-zinc-100 p-6">
+        <div className="flex items-start justify-between gap-4 border-b border-zinc-100 p-4 sm:p-6">
           <div>
             <p className="text-sm font-semibold uppercase tracking-wide text-pink-500">
               Résultats
             </p>
-            <h3 className="mt-1 text-2xl font-black text-zinc-900">
+            <h3 className="mt-1 text-xl font-black text-zinc-900 sm:text-2xl">
               {race.name}
             </h3>
             <div className="mt-2 flex flex-wrap gap-3 text-sm text-zinc-500">
@@ -1057,7 +1169,7 @@ function RaceResultsModal({
           </Link>
         </div>
 
-        <div className="max-h-[70vh] overflow-y-auto p-6">
+        <div className="max-h-[70vh] overflow-y-auto p-3 sm:p-6">
           {race.notes && (
             <div className="mb-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
@@ -1075,7 +1187,30 @@ function RaceResultsModal({
             </div>
           ) : (
             <div className="overflow-hidden rounded-xl border border-zinc-200">
-              <table className="w-full table-fixed text-left text-sm">
+              <div className="space-y-2 bg-zinc-50 p-3 sm:hidden">
+                {sortedResults.map((result) => {
+                  const pilot = pilotsById.get(result.pilotId);
+                  const car = getResultCar(result, carById, carByPilotId);
+
+                  return (
+                    <ResultMobileCard
+                      key={result.id}
+                      position={result.position}
+                      pilotName={
+                        pilot
+                          ? getPilotDisplayName(pilot, duplicateFirstnames)
+                          : "Pilote supprimé"
+                      }
+                      car={car}
+                      laps={result.laps}
+                      bestLapMs={result.bestLapMs}
+                      raceBestLap={raceBestLap}
+                    />
+                  );
+                })}
+              </div>
+
+              <table className="hidden w-full table-fixed text-left text-sm sm:table">
                 <colgroup>
                   <col className="w-[12%]" />
                   <col className="w-[34%]" />
