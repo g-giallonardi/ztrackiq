@@ -1,6 +1,12 @@
+enum RaceMode {
+  solo
+  team
+}
+
 model Race {
   id             Int           @id @default(autoincrement())
   name           String
+  mode           RaceMode      @default(solo)
   raceDate       DateTime
   trackId        Int?
   track          Track?        @relation(fields: [trackId], references: [id], onDelete: SetNull)
@@ -9,6 +15,7 @@ model Race {
   location       String?
   notes          String?
   results        RaceResult[]
+  teams          RaceTeam[]
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
@@ -27,22 +34,50 @@ model Track {
   @@index([name])
 }
 
+model RaceTeam {
+  id        Int              @id @default(autoincrement())
+  raceId    Int
+  name      String
+  race      Race             @relation(fields: [raceId], references: [id], onDelete: Cascade)
+  members   RaceTeamMember[]
+  results   RaceResult[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([raceId, name])
+  @@index([raceId])
+}
+
+model RaceTeamMember {
+  raceTeamId Int
+  pilotId    Int
+  raceTeam   RaceTeam @relation(fields: [raceTeamId], references: [id], onDelete: Cascade)
+  pilot      Pilot    @relation(fields: [pilotId], references: [id], onDelete: Cascade)
+
+  @@id([raceTeamId, pilotId])
+  @@index([pilotId])
+}
+
 model RaceResult {
   id        Int      @id @default(autoincrement())
   raceId    Int
-  pilotId   Int
+  pilotId   Int?
+  teamId    Int?
   carId     Int?
   position  Int
   laps      Int?
   bestLapMs Int?
   race      Race     @relation(fields: [raceId], references: [id], onDelete: Cascade)
-  pilot     Pilot    @relation(fields: [pilotId], references: [id], onDelete: Cascade)
+  pilot     Pilot?   @relation(fields: [pilotId], references: [id], onDelete: Cascade)
+  team      RaceTeam? @relation(fields: [teamId], references: [id], onDelete: Cascade)
   car       Car?     @relation(fields: [carId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([raceId, pilotId])
+  @@unique([raceId, teamId])
   @@unique([raceId, position])
   @@index([pilotId])
+  @@index([teamId])
   @@index([carId])
 }

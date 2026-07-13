@@ -22,6 +22,7 @@ const DEFAULT_POINTS = {
 type ChampionshipActionRow = {
   id: number;
   name: string;
+  mode: "solo" | "team";
   startDate: Date;
   endDate: Date | null;
   scoringMode: string;
@@ -104,8 +105,10 @@ export async function saveChampionship(formData: FormData) {
       ? Math.max(1, nullableNumber(formData.get("bestRaceCount")) ?? 1)
       : null;
   const pointsJson = JSON.stringify(getPointsByPosition(formData));
+  const mode = formData.get("mode")?.toString() === "team" ? "team" : "solo";
   const data = {
     name: requiredString(formData.get("name"), "Le nom"),
+    mode,
     startDate,
     endDate,
     scoringMode,
@@ -118,6 +121,7 @@ export async function saveChampionship(formData: FormData) {
         SELECT
           "id",
           "name",
+          "mode",
           "startDate",
           "endDate",
           "scoringMode",
@@ -137,6 +141,7 @@ export async function saveChampionship(formData: FormData) {
         UPDATE "Championship"
         SET
           "name" = ${data.name},
+          "mode" = ${data.mode}::"ChampionshipMode",
           "startDate" = ${data.startDate},
           "endDate" = ${data.endDate},
           "scoringMode" = ${data.scoringMode},
@@ -147,6 +152,7 @@ export async function saveChampionship(formData: FormData) {
         RETURNING
           "id",
           "name",
+          "mode",
           "startDate",
           "endDate",
           "scoringMode",
@@ -169,6 +175,7 @@ export async function saveChampionship(formData: FormData) {
       const [championship] = await tx.$queryRaw<ChampionshipActionRow[]>`
         INSERT INTO "Championship" (
           "name",
+          "mode",
           "startDate",
           "endDate",
           "scoringMode",
@@ -179,6 +186,7 @@ export async function saveChampionship(formData: FormData) {
         )
         VALUES (
           ${data.name},
+          ${data.mode}::"ChampionshipMode",
           ${data.startDate},
           ${data.endDate},
           ${data.scoringMode},
@@ -190,6 +198,7 @@ export async function saveChampionship(formData: FormData) {
         RETURNING
           "id",
           "name",
+          "mode",
           "startDate",
           "endDate",
           "scoringMode",
@@ -226,9 +235,10 @@ export async function deleteChampionship(formData: FormData) {
   await prisma.$transaction(async (tx) => {
     const [before] = await tx.$queryRaw<ChampionshipActionRow[]>`
       SELECT
-        "id",
-        "name",
-        "startDate",
+      "id",
+      "name",
+      "mode",
+      "startDate",
         "endDate",
         "scoringMode",
         "bestRaceCount",

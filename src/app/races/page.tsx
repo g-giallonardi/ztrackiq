@@ -21,11 +21,13 @@ import {
 import { deleteRace, saveRace } from "./actions";
 import { RaceChampionshipFields } from "./RaceChampionshipFields";
 import { RaceResultsFields } from "./RaceResultsFields";
+import { RaceTeamResultsFields } from "./RaceTeamResultsFields";
 import { RacesTable, type RaceTableRow } from "./RacesTable";
 
 type RaceRow = {
   id: number;
   name: string;
+  mode: "solo" | "team";
   raceDate: Date;
   trackId: number | null;
   championshipId: number | null;
@@ -45,6 +47,7 @@ type TrackRow = {
 type ChampionshipRow = {
   id: number;
   name: string;
+  mode: "solo" | "team";
   startDate: Date;
   endDate: Date | null;
 };
@@ -52,13 +55,20 @@ type ChampionshipRow = {
 type RaceResultRow = {
   id: number;
   raceId: number;
-  pilotId: number;
+  pilotId: number | null;
+  teamId: number | null;
+  teamName: string | null;
   carId: number | null;
   position: number;
   laps: number | null;
   bestLapMs: number | null;
   createdAt: Date;
   updatedAt: Date;
+};
+
+type RaceTeamMemberRow = {
+  raceTeamId: number;
+  pilotId: number;
 };
 
 type CarWithPiSpecs = {
@@ -138,14 +148,70 @@ function formatBestLapDiff(
   return `+${diffSeconds.toFixed(3)}`;
 }
 
+function getResultDisplayName(
+  result: {
+    pilotId: number | null;
+    teamId: number | null;
+    teamName: string | null;
+  },
+  pilotsById: Map<
+    number,
+    {
+      id: number;
+      firstname: string;
+      lastname: string | null;
+      nickname: string | null;
+    }
+  >,
+  duplicateFirstnames: ReadonlySet<string>,
+) {
+  if (result.teamId) {
+    return result.teamName ?? "Équipe supprimée";
+  }
+
+  const pilot = result.pilotId ? pilotsById.get(result.pilotId) : null;
+  return pilot
+    ? getPilotDisplayName(pilot, duplicateFirstnames)
+    : "Pilote supprimé";
+}
+
+function getTeamMembersLabel(
+  result: { teamId: number | null },
+  membersByTeamId: Map<number, number[]>,
+  pilotsById: Map<
+    number,
+    {
+      id: number;
+      firstname: string;
+      lastname: string | null;
+      nickname: string | null;
+    }
+  >,
+  duplicateFirstnames: ReadonlySet<string>,
+) {
+  if (!result.teamId) return null;
+
+  const members = membersByTeamId.get(result.teamId) ?? [];
+  if (members.length === 0) return null;
+
+  return members
+    .map((pilotId) => pilotsById.get(pilotId))
+    .filter((pilot): pilot is NonNullable<typeof pilot> => Boolean(pilot))
+    .map((pilot) => getPilotDisplayName(pilot, duplicateFirstnames))
+    .join(", ");
+}
+
 function getResultCar(
-  result: { carId: number | null; pilotId: number },
+  result: { carId: number | null; pilotId: number | null },
   carById: Map<number, CarWithPiSpecs>,
   carByPilotId: Map<number, CarWithPiSpecs>,
 ) {
   return result.carId
-    ? carById.get(result.carId) ?? carByPilotId.get(result.pilotId)
-    : carByPilotId.get(result.pilotId);
+    ? carById.get(result.carId) ??
+        (result.pilotId ? carByPilotId.get(result.pilotId) : undefined)
+    : result.pilotId
+      ? carByPilotId.get(result.pilotId)
+      : undefined;
 }
 
 export default async function RacesPage({
@@ -166,11 +232,20 @@ export default async function RacesPage({
 
   const params = await searchParams;
 
-  const [baseRaces, pilots, tracks, championships, cars, raceResults] = await Promise.all([
+  const [
+    baseRaces,
+    pilots,
+    tracks,
+    championships,
+    cars,
+    raceResults,
+    raceTeamMembers,
+  ] = await Promise.all([
     prisma.$queryRaw<RaceRow[]>`
       SELECT
         "Race"."id",
         "Race"."name",
+        "Race"."mode"::text AS "mode",
         "Race"."raceDate",
         "Race"."trackId",
         "Race"."championshipId",
@@ -194,7 +269,7 @@ export default async function RacesPage({
       ORDER BY "name" ASC
     `,
     prisma.$queryRaw<ChampionshipRow[]>`
-      SELECT "id", "name", "startDate", "endDate"
+      SELECT "id", "name", "mode"::text AS "mode", "startDate", "endDate"
       FROM "Championship"
       ORDER BY "startDate" DESC, "createdAt" ASC
     `,
@@ -211,20 +286,34 @@ export default async function RacesPage({
     }),
     prisma.$queryRaw<RaceResultRow[]>`
       SELECT
-        "id",
-        "raceId",
-        "pilotId",
-        "carId",
-        "position",
-        "laps",
-        "bestLapMs",
-        "createdAt",
-        "updatedAt"
+        "RaceResult"."id",
+        "RaceResult"."raceId",
+        "RaceResult"."pilotId",
+        "RaceResult"."teamId",
+        "RaceTeam"."name" AS "teamName",
+        "RaceResult"."carId",
+        "RaceResult"."position",
+        "RaceResult"."laps",
+        "RaceResult"."bestLapMs",
+        "RaceResult"."createdAt",
+        "RaceResult"."updatedAt"
       FROM "RaceResult"
-      ORDER BY "position" ASC
+      LEFT JOIN "RaceTeam" ON "RaceTeam"."id" = "RaceResult"."teamId"
+      ORDER BY "RaceResult"."position" ASC
+    `,
+    prisma.$queryRaw<RaceTeamMemberRow[]>`
+      SELECT "raceTeamId", "pilotId"
+      FROM "RaceTeamMember"
     `,
   ]);
   const resultsByRace = new Map<number, typeof raceResults>();
+  const membersByTeamId = new Map<number, number[]>();
+
+  for (const member of raceTeamMembers) {
+    const members = membersByTeamId.get(member.raceTeamId) ?? [];
+    members.push(member.pilotId);
+    membersByTeamId.set(member.raceTeamId, members);
+  }
 
   for (const result of raceResults) {
     const results = resultsByRace.get(result.raceId) ?? [];
@@ -256,6 +345,7 @@ export default async function RacesPage({
   const raceTableRows: RaceTableRow[] = races.map((race) => ({
     id: race.id,
     name: race.name,
+    mode: race.mode,
     notes: race.notes,
     raceDate: formatRaceDateForInput(race.raceDate),
     raceDateLabel: formatRaceDate(race.raceDate),
@@ -359,6 +449,7 @@ export default async function RacesPage({
           cars={cars}
           tracks={tracks}
           championships={championships}
+          membersByTeamId={membersByTeamId}
           showDeleteModal={isDeleteModalOpen}
         />
       )}
@@ -370,6 +461,7 @@ export default async function RacesPage({
           duplicateFirstnames={duplicateFirstnames}
           carById={carById}
           carByPilotId={carByPilotId}
+          membersByTeamId={membersByTeamId}
         />
       )}
 
@@ -381,6 +473,7 @@ export default async function RacesPage({
           duplicateFirstnames={duplicateFirstnames}
           carById={carById}
           carByPilotId={carByPilotId}
+          membersByTeamId={membersByTeamId}
         />
       )}
     </div>
@@ -425,6 +518,7 @@ function RaceDrawer({
   cars,
   tracks,
   championships,
+  membersByTeamId,
   showDeleteModal,
 }: {
   mode: string | undefined;
@@ -433,6 +527,7 @@ function RaceDrawer({
   race?: {
     id: number;
     name: string;
+    mode: "solo" | "team";
     raceDate: Date;
     trackId: number | null;
     championshipId: number | null;
@@ -440,7 +535,9 @@ function RaceDrawer({
     location: string | null;
     notes: string | null;
     results: {
-      pilotId: number;
+      pilotId: number | null;
+      teamId: number | null;
+      teamName: string | null;
       position: number;
       laps: number | null;
       bestLapMs: number | null;
@@ -466,6 +563,7 @@ function RaceDrawer({
   }[];
   tracks: TrackRow[];
   championships: ChampionshipRow[];
+  membersByTeamId: Map<number, number[]>;
   showDeleteModal: boolean;
 }) {
   const isEdit = mode === "edit";
@@ -479,9 +577,29 @@ function RaceDrawer({
     return {
       position,
       result: result
-        ? {
+        ? result.pilotId
+          ? {
             pilotId: result.pilotId,
             carId: result.carId,
+            laps: result.laps,
+            bestLap: result.bestLapMs ? formatBestLap(result.bestLapMs) : "",
+          }
+          : undefined
+        : undefined,
+    };
+  });
+  const teamResultSlots = Array.from({ length: slotCount }, (_, index) => {
+    const position = index + 1;
+    const result = race?.results.find(
+      (raceResult) => raceResult.position === position,
+    );
+
+    return {
+      position,
+      result: result?.teamId
+        ? {
+            teamName: result.teamName ?? `Équipe ${position}`,
+            memberIds: membersByTeamId.get(result.teamId) ?? [],
             laps: result.laps,
             bestLap: result.bestLapMs ? formatBestLap(result.bestLapMs) : "",
           }
@@ -525,6 +643,7 @@ function RaceDrawer({
             />
 
             <RaceChampionshipFields
+              defaultRaceMode={race?.mode ?? "solo"}
               defaultRaceDate={
                 race ? formatRaceDateForInput(race.raceDate) : defaultRaceDate
               }
@@ -532,11 +651,73 @@ function RaceDrawer({
               championships={championships.map((championship) => ({
                 id: championship.id,
                 name: championship.name,
+                mode: championship.mode,
                 startDate: formatRaceDateForInput(championship.startDate),
                 endDate: championship.endDate
                   ? formatRaceDateForInput(championship.endDate)
                   : null,
               }))}
+              soloResults={
+                <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                  <div className="mb-3">
+                    <p className="text-sm font-bold text-zinc-900">
+                      Pilotes, temps et tours
+                    </p>
+                    <p className="text-xs text-zinc-500">
+                      Sélectionne un pilote et une voiture par place. Les voitures du pilote sont proposées en premier, puis les voitures prêtées.
+                    </p>
+                  </div>
+
+                  {pilots.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-zinc-300 bg-white p-4 text-sm text-zinc-500">
+                      Aucun pilote actif disponible.
+                    </div>
+                  ) : (
+                    <RaceResultsFields
+                      pilots={pilots.map((pilot) => ({
+                        id: pilot.id,
+                        label: getPilotDisplayName(pilot, duplicateFirstnames),
+                      }))}
+                      cars={cars.map((car) => ({
+                        id: car.id,
+                        name: car.name,
+                        pilotId: car.pilotId,
+                        pilotLabel: getPilotDisplayName(
+                          car.pilot,
+                          duplicateFirstnames,
+                        ),
+                      }))}
+                      resultSlots={resultSlots}
+                    />
+                  )}
+                </div>
+              }
+              teamResults={
+                <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                  <div className="mb-3">
+                    <p className="text-sm font-bold text-zinc-900">
+                      Équipes, temps et tours
+                    </p>
+                    <p className="text-xs text-zinc-500">
+                      Crée une équipe par place, puis sélectionne les pilotes qui la composent.
+                    </p>
+                  </div>
+
+                  {pilots.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-zinc-300 bg-white p-4 text-sm text-zinc-500">
+                      Aucun pilote actif disponible.
+                    </div>
+                  ) : (
+                    <RaceTeamResultsFields
+                      pilots={pilots.map((pilot) => ({
+                        id: pilot.id,
+                        label: getPilotDisplayName(pilot, duplicateFirstnames),
+                      }))}
+                      resultSlots={teamResultSlots}
+                    />
+                  )}
+                </div>
+              }
             />
 
             <RaceField
@@ -564,40 +745,6 @@ function RaceDrawer({
                 className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20"
               />
             </label>
-
-            <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
-              <div className="mb-3">
-                <p className="text-sm font-bold text-zinc-900">
-                  Pilotes, temps et tours
-                </p>
-                <p className="text-xs text-zinc-500">
-                  Sélectionne un pilote et une voiture par place. Les voitures du pilote sont proposées en premier, puis les voitures prêtées.
-                </p>
-              </div>
-
-              {pilots.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-zinc-300 bg-white p-4 text-sm text-zinc-500">
-                  Aucun pilote actif disponible.
-                </div>
-              ) : (
-                <RaceResultsFields
-                  pilots={pilots.map((pilot) => ({
-                    id: pilot.id,
-                    label: getPilotDisplayName(pilot, duplicateFirstnames),
-                  }))}
-                  cars={cars.map((car) => ({
-                    id: car.id,
-                    name: car.name,
-                    pilotId: car.pilotId,
-                    pilotLabel: getPilotDisplayName(
-                      car.pilot,
-                      duplicateFirstnames,
-                    ),
-                  }))}
-                  resultSlots={resultSlots}
-                />
-              )}
-            </div>
 
             {race && <input type="hidden" name="id" value={race.id} />}
 
@@ -678,6 +825,7 @@ function RaceSessionModal({
   duplicateFirstnames,
   carById,
   carByPilotId,
+  membersByTeamId,
 }: {
   date: string;
   races: (RaceRow & { results: RaceResultRow[] })[];
@@ -693,6 +841,7 @@ function RaceSessionModal({
   duplicateFirstnames: ReadonlySet<string>;
   carById: Map<number, CarWithPiSpecs>;
   carByPilotId: Map<number, CarWithPiSpecs>;
+  membersByTeamId: Map<number, number[]>;
 }) {
   const sessionResults = races.flatMap((race) => race.results);
   const sessionLaps = sessionResults
@@ -706,9 +855,14 @@ function RaceSessionModal({
   const highestLapsPilot =
     highestLaps === null
       ? null
-      : pilotsById.get(
-          sessionResults.find((result) => result.laps === highestLaps)
-            ?.pilotId ?? 0,
+      : getResultDisplayName(
+          sessionResults.find((result) => result.laps === highestLaps) ?? {
+            pilotId: null,
+            teamId: null,
+            teamName: null,
+          },
+          pilotsById,
+          duplicateFirstnames,
         );
   const averageBestLap = getAverage(sessionBestLaps);
   const sessionBestLap =
@@ -716,9 +870,15 @@ function RaceSessionModal({
   const sessionBestLapPilot =
     sessionBestLap === null
       ? null
-      : pilotsById.get(
-          sessionResults.find((result) => result.bestLapMs === sessionBestLap)
-            ?.pilotId ?? 0,
+      : getResultDisplayName(
+          sessionResults.find((result) => result.bestLapMs === sessionBestLap) ??
+            {
+              pilotId: null,
+              teamId: null,
+              teamName: null,
+            },
+          pilotsById,
+          duplicateFirstnames,
         );
 
   return (
@@ -754,9 +914,7 @@ function RaceSessionModal({
               label="Tours max."
               value={highestLaps === null ? "—" : String(highestLaps)}
               detail={
-                highestLapsPilot
-                  ? getPilotDisplayName(highestLapsPilot, duplicateFirstnames)
-                  : undefined
+                highestLapsPilot ?? undefined
               }
             />
             <SessionStat
@@ -769,12 +927,7 @@ function RaceSessionModal({
               label="Meilleur temps"
               value={formatBestLap(sessionBestLap)}
               detail={
-                sessionBestLapPilot
-                  ? getPilotDisplayName(
-                      sessionBestLapPilot,
-                      duplicateFirstnames,
-                    )
-                  : undefined
+                sessionBestLapPilot ?? undefined
               }
             />
           </div>
@@ -827,7 +980,6 @@ function RaceSessionModal({
                     <>
                       <div className="space-y-2 p-3 sm:hidden">
                         {sortedResults.map((result) => {
-                          const pilot = pilotsById.get(result.pilotId);
                           const car = getResultCar(
                             result,
                             carById,
@@ -845,13 +997,18 @@ function RaceSessionModal({
                             <ResultMobileCard
                               key={result.id}
                               position={result.position}
-                              pilotName={
-                                pilot
-                                  ? getPilotDisplayName(
-                                      pilot,
-                                      duplicateFirstnames,
-                                    )
-                                  : "Pilote supprimé"
+                              pilotName={getResultDisplayName(
+                                result,
+                                pilotsById,
+                                duplicateFirstnames,
+                              )}
+                              subtitle={
+                                getTeamMembersLabel(
+                                  result,
+                                  membersByTeamId,
+                                  pilotsById,
+                                  duplicateFirstnames,
+                                ) ?? undefined
                               }
                               car={car}
                               laps={result.laps}
@@ -865,17 +1022,32 @@ function RaceSessionModal({
 
                       <table className="hidden w-full table-fixed text-left text-xs sm:table">
                         <colgroup>
-                          <col className="w-[12%]" />
-                          <col className="w-[32%]" />
-                          <col className="w-[16%]" />
-                          <col className="w-[14%]" />
-                          <col className="w-[26%]" />
+                          {race.mode === "team" ? (
+                            <>
+                              <col className="w-[14%]" />
+                              <col className="w-[42%]" />
+                              <col className="w-[14%]" />
+                              <col className="w-[30%]" />
+                            </>
+                          ) : (
+                            <>
+                              <col className="w-[12%]" />
+                              <col className="w-[32%]" />
+                              <col className="w-[16%]" />
+                              <col className="w-[14%]" />
+                              <col className="w-[26%]" />
+                            </>
+                          )}
                         </colgroup>
                         <thead className="bg-white text-xs uppercase tracking-wide text-zinc-500">
                           <tr>
                             <th className="px-3 py-2 font-semibold">Place</th>
-                            <th className="px-3 py-2 font-semibold">Pilote</th>
-                            <th className="px-3 py-2 font-semibold">Classe</th>
+                            <th className="px-3 py-2 font-semibold">
+                              {race.mode === "team" ? "Équipe" : "Pilote"}
+                            </th>
+                            {race.mode === "solo" && (
+                              <th className="px-3 py-2 font-semibold">Classe</th>
+                            )}
                             <th className="px-3 py-2 font-semibold">Tours</th>
                             <th className="px-3 py-2 font-semibold">
                               Meilleur temps
@@ -884,7 +1056,6 @@ function RaceSessionModal({
                         </thead>
                         <tbody className="divide-y divide-zinc-100">
                           {sortedResults.map((result) => {
-                            const pilot = pilotsById.get(result.pilotId);
                             const car = getResultCar(
                               result,
                               carById,
@@ -904,14 +1075,25 @@ function RaceSessionModal({
                                   #{result.position}
                                 </td>
                                 <td className="px-3 py-2">
-                                  {pilot ? (
+                                  {result.pilotId || result.teamId ? (
                                     <div className="min-w-0">
                                       <p className="truncate font-semibold text-zinc-900">
-                                        {getPilotDisplayName(
-                                          pilot,
+                                        {getResultDisplayName(
+                                          result,
+                                          pilotsById,
                                           duplicateFirstnames,
                                         )}
                                       </p>
+                                      {result.teamId && (
+                                        <p className="truncate text-[11px] text-zinc-500">
+                                          {getTeamMembersLabel(
+                                            result,
+                                            membersByTeamId,
+                                            pilotsById,
+                                            duplicateFirstnames,
+                                          )}
+                                        </p>
+                                      )}
                                     </div>
                                   ) : (
                                     <span className="text-zinc-500">
@@ -919,17 +1101,19 @@ function RaceSessionModal({
                                     </span>
                                   )}
                                 </td>
-                                <td className="px-3 py-2">
-                                  {car ? (
-                                    <PiTag
-                                      piClass={formatPiClass(getCarTotalPi(car))}
-                                      piValue={getCarTotalPi(car)}
-                                      compact
-                                    />
-                                  ) : (
-                                    <span className="text-zinc-400">—</span>
-                                  )}
-                                </td>
+                                {race.mode === "solo" && (
+                                  <td className="px-3 py-2">
+                                    {car ? (
+                                      <PiTag
+                                        piClass={formatPiClass(getCarTotalPi(car))}
+                                        piValue={getCarTotalPi(car)}
+                                        compact
+                                      />
+                                    ) : (
+                                      <span className="text-zinc-400">—</span>
+                                    )}
+                                  </td>
+                                )}
                                 <td className="px-3 py-2 text-zinc-600">
                                   {result.laps ?? "—"}
                                 </td>
@@ -1044,6 +1228,7 @@ function PiTag({
 function ResultMobileCard({
   position,
   pilotName,
+  subtitle,
   car,
   laps,
   bestLapMs,
@@ -1052,6 +1237,7 @@ function ResultMobileCard({
 }: {
   position: number;
   pilotName: string;
+  subtitle?: string;
   car: CarWithPiSpecs | undefined;
   laps: number | null;
   bestLapMs: number | null;
@@ -1066,6 +1252,9 @@ function ResultMobileCard({
         <div className="min-w-0">
           <p className="text-xs font-semibold text-zinc-500">#{position}</p>
           <p className="truncate font-bold text-zinc-900">{pilotName}</p>
+          {subtitle && (
+            <p className="truncate text-xs text-zinc-500">{subtitle}</p>
+          )}
         </div>
         {car ? (
           <PiTag
@@ -1117,6 +1306,7 @@ function RaceResultsModal({
   duplicateFirstnames,
   carById,
   carByPilotId,
+  membersByTeamId,
 }: {
   race: RaceRow & { results: RaceResultRow[] };
   pilotsById: Map<
@@ -1131,6 +1321,7 @@ function RaceResultsModal({
   duplicateFirstnames: ReadonlySet<string>;
   carById: Map<number, CarWithPiSpecs>;
   carByPilotId: Map<number, CarWithPiSpecs>;
+  membersByTeamId: Map<number, number[]>;
 }) {
   const sortedResults = [...race.results].sort(
     (a, b) => a.position - b.position,
@@ -1189,17 +1380,24 @@ function RaceResultsModal({
             <div className="overflow-hidden rounded-xl border border-zinc-200">
               <div className="space-y-2 bg-zinc-50 p-3 sm:hidden">
                 {sortedResults.map((result) => {
-                  const pilot = pilotsById.get(result.pilotId);
                   const car = getResultCar(result, carById, carByPilotId);
 
                   return (
                     <ResultMobileCard
                       key={result.id}
                       position={result.position}
-                      pilotName={
-                        pilot
-                          ? getPilotDisplayName(pilot, duplicateFirstnames)
-                          : "Pilote supprimé"
+                      pilotName={getResultDisplayName(
+                        result,
+                        pilotsById,
+                        duplicateFirstnames,
+                      )}
+                      subtitle={
+                        getTeamMembersLabel(
+                          result,
+                          membersByTeamId,
+                          pilotsById,
+                          duplicateFirstnames,
+                        ) ?? undefined
                       }
                       car={car}
                       laps={result.laps}
@@ -1212,24 +1410,38 @@ function RaceResultsModal({
 
               <table className="hidden w-full table-fixed text-left text-sm sm:table">
                 <colgroup>
-                  <col className="w-[12%]" />
-                  <col className="w-[34%]" />
-                  <col className="w-[16%]" />
-                  <col className="w-[14%]" />
-                  <col className="w-[24%]" />
+                  {race.mode === "team" ? (
+                    <>
+                      <col className="w-[14%]" />
+                      <col className="w-[42%]" />
+                      <col className="w-[14%]" />
+                      <col className="w-[30%]" />
+                    </>
+                  ) : (
+                    <>
+                      <col className="w-[12%]" />
+                      <col className="w-[34%]" />
+                      <col className="w-[16%]" />
+                      <col className="w-[14%]" />
+                      <col className="w-[24%]" />
+                    </>
+                  )}
                 </colgroup>
                 <thead className="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
                   <tr>
                     <th className="px-4 py-3 font-semibold">Place</th>
-                    <th className="px-4 py-3 font-semibold">Pilote</th>
-                    <th className="px-4 py-3 font-semibold">Classe</th>
+                    <th className="px-4 py-3 font-semibold">
+                      {race.mode === "team" ? "Équipe" : "Pilote"}
+                    </th>
+                    {race.mode === "solo" && (
+                      <th className="px-4 py-3 font-semibold">Classe</th>
+                    )}
                     <th className="px-4 py-3 font-semibold">Tours</th>
                     <th className="px-4 py-3 font-semibold">Meilleur temps</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100">
                   {sortedResults.map((result) => {
-                    const pilot = pilotsById.get(result.pilotId);
                     const car = getResultCar(result, carById, carByPilotId);
                     const isBestLap =
                       result.bestLapMs !== null && result.bestLapMs === raceBestLap;
@@ -1240,29 +1452,42 @@ function RaceResultsModal({
                           #{result.position}
                         </td>
                         <td className="px-4 py-3">
-                          {pilot ? (
+                          {result.pilotId || result.teamId ? (
                             <div className="min-w-0">
                               <p className="truncate font-semibold text-zinc-900">
-                                {getPilotDisplayName(
-                                  pilot,
+                                {getResultDisplayName(
+                                  result,
+                                  pilotsById,
                                   duplicateFirstnames,
                                 )}
                               </p>
+                              {result.teamId && (
+                                <p className="truncate text-xs text-zinc-500">
+                                  {getTeamMembersLabel(
+                                    result,
+                                    membersByTeamId,
+                                    pilotsById,
+                                    duplicateFirstnames,
+                                  )}
+                                </p>
+                              )}
                             </div>
                           ) : (
                             <span className="text-zinc-500">Pilote supprimé</span>
                           )}
                         </td>
-                        <td className="px-4 py-3">
-                          {car ? (
-                            <PiTag
-                              piClass={formatPiClass(getCarTotalPi(car))}
-                              piValue={getCarTotalPi(car)}
-                            />
-                          ) : (
-                            <span className="text-zinc-400">—</span>
-                          )}
-                        </td>
+                        {race.mode === "solo" && (
+                          <td className="px-4 py-3">
+                            {car ? (
+                              <PiTag
+                                piClass={formatPiClass(getCarTotalPi(car))}
+                                piValue={getCarTotalPi(car)}
+                              />
+                            ) : (
+                              <span className="text-zinc-400">—</span>
+                            )}
+                          </td>
+                        )}
                         <td className="px-4 py-3 text-zinc-600">
                           {result.laps ?? "—"}
                         </td>

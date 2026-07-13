@@ -19,6 +19,7 @@ import { MapPin, Pencil, Trophy } from "lucide-react";
 export type RaceTableRow = {
   id: number;
   name: string;
+  mode: "solo" | "team";
   notes: string | null;
   raceDate: string;
   raceDateLabel: string;
@@ -45,6 +46,20 @@ function equalsNumberOrEmpty(rowValue: unknown, filterValue: unknown) {
   if (!filterValue) return true;
 
   return Number(rowValue) === Number(filterValue);
+}
+
+function RaceModeTag({ mode }: { mode: "solo" | "team" }) {
+  return (
+    <span
+      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-inset ${
+        mode === "team"
+          ? "bg-purple-50 text-purple-700 ring-purple-600/20"
+          : "bg-cyan-50 text-cyan-700 ring-cyan-600/20"
+      }`}
+    >
+      {mode === "team" ? "Équipe" : "Solo"}
+    </span>
+  );
 }
 
 function ColumnFilter({
@@ -143,6 +158,12 @@ export function RacesTable({
             </div>
           </div>
         ),
+      },
+      {
+        accessorKey: "mode",
+        header: "Type",
+        filterFn: includesValue,
+        cell: ({ row }) => <RaceModeTag mode={row.original.mode} />,
       },
       {
         accessorKey: "raceDate",
@@ -327,6 +348,7 @@ export function RacesTable({
                   <MapPin size="13" />
                   {race.trackName ?? "Circuit inconnu"}
                 </span>
+                <RaceModeTag mode={race.mode} />
                 {race.championshipName && (
                   <span className="inline-flex items-center rounded-full bg-purple-50 px-3 py-1 text-xs font-semibold text-purple-700 ring-1 ring-inset ring-purple-600/20">
                     {race.championshipName}

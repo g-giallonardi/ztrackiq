@@ -1,10 +1,12 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 
 type ChampionshipOption = {
   id: number;
   name: string;
+  mode: "solo" | "team";
   startDate: string;
   endDate: string | null;
 };
@@ -24,14 +26,21 @@ function isChampionshipAvailable(
 }
 
 export function RaceChampionshipFields({
+  defaultRaceMode = "solo",
   defaultRaceDate,
   defaultChampionshipId,
   championships,
+  soloResults,
+  teamResults,
 }: {
+  defaultRaceMode?: "solo" | "team";
   defaultRaceDate?: string;
   defaultChampionshipId?: number | null;
   championships: ChampionshipOption[];
+  soloResults: ReactNode;
+  teamResults: ReactNode;
 }) {
+  const [raceMode, setRaceMode] = useState<"solo" | "team">(defaultRaceMode);
   const [raceDate, setRaceDate] = useState(defaultRaceDate ?? "");
   const [championshipId, setChampionshipId] = useState(
     defaultChampionshipId ? String(defaultChampionshipId) : "",
@@ -39,10 +48,12 @@ export function RaceChampionshipFields({
 
   const availableChampionships = useMemo(
     () =>
-      championships.filter((championship) =>
-        isChampionshipAvailable(championship, raceDate),
+      championships.filter(
+        (championship) =>
+          championship.mode === raceMode &&
+          isChampionshipAvailable(championship, raceDate),
       ),
-    [championships, raceDate],
+    [championships, raceDate, raceMode],
   );
   const hasSelectedChampionship = availableChampionships.some(
     (championship) => String(championship.id) === championshipId,
@@ -50,6 +61,26 @@ export function RaceChampionshipFields({
 
   return (
     <>
+      <label className="block">
+        <span className="mb-1.5 block text-sm font-semibold text-zinc-700">
+          Type de course <span className="text-pink-500"> *</span>
+        </span>
+        <select
+          name="raceMode"
+          value={raceMode}
+          onChange={(event) => {
+            const nextMode =
+              event.currentTarget.value === "team" ? "team" : "solo";
+            setRaceMode(nextMode);
+            setChampionshipId("");
+          }}
+          className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-zinc-900 outline-none transition focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20"
+        >
+          <option value="solo">Solo</option>
+          <option value="team">Équipe</option>
+        </select>
+      </label>
+
       <label className="block">
         <span className="mb-1.5 block text-sm font-semibold text-zinc-700">
           Session <span className="text-pink-500"> *</span>
@@ -100,9 +131,11 @@ export function RaceChampionshipFields({
           ))}
         </select>
         <p className="mt-1 text-xs text-zinc-500">
-          Renseigne la session pour choisir un championnat compatible.
+          Renseigne la session pour choisir un championnat compatible avec le type de course.
         </p>
       </label>
+
+      {raceMode === "team" ? teamResults : soloResults}
     </>
   );
 }
