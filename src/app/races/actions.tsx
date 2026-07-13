@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 type RaceActionRow = {
   id: number;
   name: string;
+  mode: "solo" | "team";
   raceDate: Date;
   trackId: number | null;
   championshipId: number | null;
@@ -17,6 +18,8 @@ type RaceActionRow = {
   createdAt: Date;
   updatedAt: Date;
 };
+
+type RaceMode = "solo" | "team";
 
 function nullableString(value: FormDataEntryValue | null) {
   const str = value?.toString().trim();
@@ -107,6 +110,40 @@ function getRaceResults(formData: FormData) {
     }));
 }
 
+function getRaceMode(formData: FormData): RaceMode {
+  return formData.get("raceMode")?.toString() === "team" ? "team" : "solo";
+}
+
+function getTeamRaceResults(formData: FormData) {
+  const usedTeamNames = new Set<string>();
+
+  return formData
+    .getAll("teamResultPositions")
+    .map((value) => nullableNumber(value))
+    .filter((position): position is number => Boolean(position))
+    .map((position) => {
+      const rawTeamName = nullableString(formData.get(`teamName_${position}`));
+      const teamName = rawTeamName ?? `Équipe ${position}`;
+      const memberIds = formData
+        .getAll(`teamMembers_${position}`)
+        .map((value) => nullableNumber(value))
+        .filter((pilotId): pilotId is number => pilotId !== null);
+      const laps = nullablePositiveInteger(formData.get(`teamLaps_${position}`));
+      const bestLapMs = parseBestLapMs(formData.get(`teamBestLap_${position}`));
+
+      return { position, teamName, memberIds, laps, bestLapMs };
+    })
+    .filter((result) => {
+      const normalizedName = result.teamName.trim().toLowerCase();
+      if (result.memberIds.length === 0 || usedTeamNames.has(normalizedName)) {
+        return false;
+      }
+
+      usedTeamNames.add(normalizedName);
+      return true;
+    });
+}
+
 async function resolveTrackId(tx: Prisma.TransactionClient, trackName: string) {
   const [track] = await tx.$queryRaw<{ id: number }[]>`
     INSERT INTO "Track" ("name", "createdAt", "updatedAt")
@@ -125,6 +162,7 @@ async function resolveChampionshipId(
   tx: Prisma.TransactionClient,
   championshipId: number | null,
   raceDate: Date,
+  raceMode: RaceMode,
 ) {
   if (!championshipId) return null;
 
@@ -133,6 +171,7 @@ async function resolveChampionshipId(
     FROM "Championship"
     WHERE
       "id" = ${championshipId}
+      AND "mode" = ${raceMode}::"ChampionshipMode"
       AND "startDate" <= NOW()
       AND "startDate" <= ${raceDate}
       AND ("endDate" IS NULL OR "endDate" >= ${raceDate})
@@ -154,13 +193,16 @@ async function replaceRaceResults(
     DELETE FROM "RaceResult"
     WHERE "raceId" = ${raceId}
   `;
+  await tx.$executeRaw`
+    DELETE FROM "RaceTeam"
+    WHERE "raceId" = ${raceId}
+  `;
 
   for (const result of results) {
     await tx.$executeRaw`
       INSERT INTO "RaceResult" (
         "raceId",
         "pilotId",
-        "carId",
         "position",
         "laps",
         "bestLapMs",
@@ -181,18 +223,73 @@ async function replaceRaceResults(
   }
 }
 
+async function replaceTeamRaceResults(
+  tx: Prisma.TransactionClient,
+  raceId: number,
+  results: ReturnType<typeof getTeamRaceResults>,
+) {
+  await tx.$executeRaw`
+    DELETE FROM "RaceResult"
+    WHERE "raceId" = ${raceId}
+  `;
+  await tx.$executeRaw`
+    DELETE FROM "RaceTeam"
+    WHERE "raceId" = ${raceId}
+  `;
+
+  for (const result of results) {
+    const [team] = await tx.$queryRaw<{ id: number }[]>`
+      INSERT INTO "RaceTeam" ("raceId", "name", "createdAt", "updatedAt")
+      VALUES (${raceId}, ${result.teamName}, NOW(), NOW())
+      RETURNING "id"
+    `;
+
+    for (const pilotId of result.memberIds) {
+      await tx.$executeRaw`
+        INSERT INTO "RaceTeamMember" ("raceTeamId", "pilotId")
+        VALUES (${team.id}, ${pilotId})
+        ON CONFLICT ("raceTeamId", "pilotId") DO NOTHING
+      `;
+    }
+
+    await tx.$executeRaw`
+      INSERT INTO "RaceResult" (
+        "raceId",
+        "teamId",
+        "position",
+        "laps",
+        "bestLapMs",
+        "createdAt",
+        "updatedAt"
+      )
+      VALUES (
+        ${raceId},
+        ${team.id},
+        ${result.position},
+        ${result.laps},
+        ${result.bestLapMs},
+        NOW(),
+        NOW()
+      )
+    `;
+  }
+}
+
 export async function saveRace(formData: FormData) {
   await requireAdmin();
 
   const id = nullableNumber(formData.get("id"));
+  const raceMode = getRaceMode(formData);
   const data = {
     name: requiredString(formData.get("name"), "Le nom"),
+    mode: raceMode,
     raceDate: requiredDate(formData.get("raceDate"), "La session"),
     trackName: requiredString(formData.get("trackName"), "Le circuit"),
     championshipId: nullableNumber(formData.get("championshipId")),
     notes: nullableString(formData.get("notes")),
   };
-  const results = getRaceResults(formData);
+  const results =
+    raceMode === "team" ? getTeamRaceResults(formData) : getRaceResults(formData);
 
   await prisma.$transaction(async (tx) => {
     const trackId = await resolveTrackId(tx, data.trackName);
@@ -200,6 +297,7 @@ export async function saveRace(formData: FormData) {
       tx,
       data.championshipId,
       data.raceDate,
+      data.mode,
     );
 
     if (id) {
@@ -207,6 +305,7 @@ export async function saveRace(formData: FormData) {
         SELECT
           "id",
           "name",
+          "mode",
           "raceDate",
           "trackId",
           "championshipId",
@@ -226,6 +325,7 @@ export async function saveRace(formData: FormData) {
         UPDATE "Race"
         SET
           "name" = ${data.name},
+          "mode" = ${data.mode}::"RaceMode",
           "raceDate" = ${data.raceDate},
           "trackId" = ${trackId},
           "championshipId" = ${championshipId},
@@ -236,6 +336,7 @@ export async function saveRace(formData: FormData) {
         RETURNING
           "id",
           "name",
+          "mode",
           "raceDate",
           "trackId",
           "championshipId",
@@ -245,7 +346,19 @@ export async function saveRace(formData: FormData) {
           "updatedAt"
       `;
 
-      await replaceRaceResults(tx, id, results);
+      if (data.mode === "team") {
+        await replaceTeamRaceResults(
+          tx,
+          id,
+          results as ReturnType<typeof getTeamRaceResults>,
+        );
+      } else {
+        await replaceRaceResults(
+          tx,
+          id,
+          results as ReturnType<typeof getRaceResults>,
+        );
+      }
 
       await tx.auditLog.create({
         data: {
@@ -260,6 +373,7 @@ export async function saveRace(formData: FormData) {
       const [race] = await tx.$queryRaw<RaceActionRow[]>`
         INSERT INTO "Race" (
           "name",
+          "mode",
           "raceDate",
           "trackId",
           "championshipId",
@@ -270,6 +384,7 @@ export async function saveRace(formData: FormData) {
         )
         VALUES (
           ${data.name},
+          ${data.mode}::"RaceMode",
           ${data.raceDate},
           ${trackId},
           ${championshipId},
@@ -281,6 +396,7 @@ export async function saveRace(formData: FormData) {
         RETURNING
           "id",
           "name",
+          "mode",
           "raceDate",
           "trackId",
           "championshipId",
@@ -290,7 +406,19 @@ export async function saveRace(formData: FormData) {
           "updatedAt"
       `;
 
-      await replaceRaceResults(tx, race.id, results);
+      if (data.mode === "team") {
+        await replaceTeamRaceResults(
+          tx,
+          race.id,
+          results as ReturnType<typeof getTeamRaceResults>,
+        );
+      } else {
+        await replaceRaceResults(
+          tx,
+          race.id,
+          results as ReturnType<typeof getRaceResults>,
+        );
+      }
 
       await tx.auditLog.create({
         data: {
@@ -319,9 +447,10 @@ export async function deleteRace(formData: FormData) {
   await prisma.$transaction(async (tx) => {
     const [before] = await tx.$queryRaw<RaceActionRow[]>`
       SELECT
-        "id",
-        "name",
-        "raceDate",
+      "id",
+      "name",
+      "mode",
+      "raceDate",
         "trackId",
         "championshipId",
         "location",

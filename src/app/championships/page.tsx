@@ -31,6 +31,7 @@ const PI_CLASSES = ["X", "S", "A", "B", "C"] as const;
 type ChampionshipRow = {
   id: number;
   name: string;
+  mode: "solo" | "team";
   startDate: Date;
   endDate: Date | null;
   scoringMode: string;
@@ -46,9 +47,12 @@ type ChampionshipRaceResultRow = {
   raceName: string;
   raceDate: Date;
   raceCreatedAt: Date;
-  pilotId: number;
+  raceMode: "solo" | "team";
+  pilotId: number | null;
+  teamId: number | null;
+  teamName: string | null;
   carId: number | null;
-  firstname: string;
+  firstname: string | null;
   lastname: string | null;
   nickname: string | null;
   position: number;
@@ -127,14 +131,31 @@ function formatChampionshipPeriod(championship: {
   }`;
 }
 
+function ModeTag({ mode }: { mode: "solo" | "team" }) {
+  return (
+    <span
+      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-inset ${
+        mode === "team"
+          ? "bg-purple-50 text-purple-700 ring-purple-600/20"
+          : "bg-cyan-50 text-cyan-700 ring-cyan-600/20"
+      }`}
+    >
+      {mode === "team" ? "Équipe" : "Solo"}
+    </span>
+  );
+}
+
 function getResultCar(
-  result: { carId: number | null; pilotId: number },
+  result: { carId: number | null; pilotId: number | null },
   carById: Map<number, CarWithPiSpecs>,
   carByPilotId: Map<number, CarWithPiSpecs>,
 ) {
   return result.carId
-    ? carById.get(result.carId) ?? carByPilotId.get(result.pilotId)
-    : carByPilotId.get(result.pilotId);
+    ? carById.get(result.carId) ??
+        (result.pilotId ? carByPilotId.get(result.pilotId) : undefined)
+    : result.pilotId
+      ? carByPilotId.get(result.pilotId)
+      : undefined;
 }
 
 function getPointsByPosition(value: unknown) {
@@ -166,7 +187,9 @@ function getChampionshipResults(
   raceResults: ChampionshipRaceResultRow[],
 ) {
   return raceResults.filter(
-    (result) => result.championshipId === championship.id,
+    (result) =>
+      result.championshipId === championship.id &&
+      result.raceMode === championship.mode,
   );
 }
 
@@ -207,7 +230,7 @@ function getStandings(
   piClass?: string,
 ) {
   const pointsByPosition = getPointsByPosition(championship.pointsByPosition);
-  const rows = new Map<number, StandingRow>();
+  const rows = new Map<string, StandingRow>();
 
   for (const result of getChampionshipResults(championship, raceResults)) {
     if (piClass) {
@@ -215,10 +238,29 @@ function getStandings(
       if (!car || formatPiClass(getCarTotalPi(car)) !== piClass) continue;
     }
 
+    const entrantId =
+      championship.mode === "team" ? result.teamId : result.pilotId;
+    if (!entrantId) continue;
+    const entrantName =
+      championship.mode === "team"
+        ? result.teamName ?? "Équipe supprimée"
+        : getPilotDisplayName(
+            {
+              firstname: result.firstname ?? "",
+              lastname: result.lastname,
+              nickname: result.nickname,
+            },
+            duplicateFirstnames,
+          );
+    const entrantKey =
+      championship.mode === "team"
+        ? `team:${entrantName.trim().toLowerCase()}`
+        : `pilot:${entrantId}`;
+
     const score = getRacePoints(result, pointsByPosition);
-    const current = rows.get(result.pilotId) ?? {
-      pilotId: result.pilotId,
-      pilotName: getPilotDisplayName(result, duplicateFirstnames),
+    const current = rows.get(entrantKey) ?? {
+      pilotId: entrantId,
+      pilotName: entrantName,
       points: 0,
       races: 0,
       countedRaces: 0,
@@ -244,7 +286,7 @@ function getStandings(
       points: score,
       counted: false,
     });
-    rows.set(result.pilotId, current);
+    rows.set(entrantKey, current);
   }
 
   return [...rows.values()]
@@ -323,6 +365,7 @@ export default async function ChampionshipsPage({
       SELECT
         "id",
         "name",
+        "mode"::text AS "mode",
         "startDate",
         "endDate",
         "scoringMode",
@@ -340,7 +383,10 @@ export default async function ChampionshipsPage({
         "Race"."name" AS "raceName",
         "Race"."raceDate",
         "Race"."createdAt" AS "raceCreatedAt",
+        "Race"."mode"::text AS "raceMode",
         "RaceResult"."pilotId",
+        "RaceResult"."teamId",
+        "RaceTeam"."name" AS "teamName",
         "RaceResult"."carId",
         "Pilot"."firstname",
         "Pilot"."lastname",
@@ -348,7 +394,8 @@ export default async function ChampionshipsPage({
         "RaceResult"."position"
       FROM "RaceResult"
       INNER JOIN "Race" ON "Race"."id" = "RaceResult"."raceId"
-      INNER JOIN "Pilot" ON "Pilot"."id" = "RaceResult"."pilotId"
+      LEFT JOIN "Pilot" ON "Pilot"."id" = "RaceResult"."pilotId"
+      LEFT JOIN "RaceTeam" ON "RaceTeam"."id" = "RaceResult"."teamId"
       ORDER BY "Race"."raceDate" ASC, "Race"."createdAt" ASC, "RaceResult"."position" ASC
     `,
     prisma.car.findMany({
@@ -373,7 +420,18 @@ export default async function ChampionshipsPage({
     }
   }
   const championshipPilots = [
-    ...new Map(raceResults.map((result) => [result.pilotId, result])).values(),
+    ...new Map(
+      raceResults
+        .filter((result) => result.pilotId && result.firstname)
+        .map((result) => [
+          result.pilotId,
+          {
+            firstname: result.firstname ?? "",
+            lastname: result.lastname,
+            nickname: result.nickname,
+          },
+        ]),
+    ).values(),
   ];
   const duplicateFirstnames = buildDuplicateFirstnameSet(championshipPilots);
 
@@ -480,6 +538,9 @@ export default async function ChampionshipsPage({
                   <p className="mt-1 text-xs text-zinc-500">
                     {formatChampionshipPeriod(championship)}
                   </p>
+                  <div className="mt-2">
+                    <ModeTag mode={championship.mode} />
+                  </div>
                 </div>
 
                 {canManage && (
@@ -670,6 +731,9 @@ function ChampionshipDetailsModal({
             <p className="mt-2 text-sm text-zinc-500">
               {formatChampionshipPeriod(championship)}
             </p>
+            <div className="mt-2">
+              <ModeTag mode={championship.mode} />
+            </div>
             <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
               {championship.scoringMode === "BEST"
                 ? `${championship.bestRaceCount ?? 1} meilleurs résultats`
@@ -688,7 +752,7 @@ function ChampionshipDetailsModal({
 
         <div className="max-h-[70vh] overflow-y-auto p-6">
           <h4 className="mb-3 text-sm font-black uppercase tracking-wide text-zinc-700">
-            Classement général
+            Classement général {championship.mode === "team" ? "équipes" : ""}
           </h4>
           {standings.length === 0 ? (
             <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 p-8 text-center text-sm text-zinc-500">
@@ -710,37 +774,39 @@ function ChampionshipDetailsModal({
             />
           )}
 
-          <div className="mt-6">
-            <h4 className="mb-3 text-sm font-black uppercase tracking-wide text-zinc-700">
-              Classements par classe
-            </h4>
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-              {classStandings.map(({ piClass, standings }) => (
-                <section
-                  key={piClass}
-                  className="overflow-hidden rounded-xl border border-zinc-200"
-                >
-                  <div className="border-b border-zinc-100 bg-zinc-50 px-4 py-2">
-                    <p className="text-sm font-black text-zinc-900">
-                      Classe {piClass}
-                    </p>
-                  </div>
-                  {standings.length === 0 ? (
-                    <div className="p-4 text-sm text-zinc-500">
-                      Aucun pilote classé.
+          {championship.mode === "solo" && (
+            <div className="mt-6">
+              <h4 className="mb-3 text-sm font-black uppercase tracking-wide text-zinc-700">
+                Classements par classe
+              </h4>
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                {classStandings.map(({ piClass, standings }) => (
+                  <section
+                    key={piClass}
+                    className="overflow-hidden rounded-xl border border-zinc-200"
+                  >
+                    <div className="border-b border-zinc-100 bg-zinc-50 px-4 py-2">
+                      <p className="text-sm font-black text-zinc-900">
+                        Classe {piClass}
+                      </p>
                     </div>
-                  ) : (
-                    <StandingsTable
-                      championship={championship}
-                      standings={standings}
-                      selectedPilotId={selectedPilotId}
-                      compact
-                    />
-                  )}
-                </section>
-              ))}
+                    {standings.length === 0 ? (
+                      <div className="p-4 text-sm text-zinc-500">
+                        Aucun pilote classé.
+                      </div>
+                    ) : (
+                      <StandingsTable
+                        championship={championship}
+                        standings={standings}
+                        selectedPilotId={selectedPilotId}
+                        compact
+                      />
+                    )}
+                  </section>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
@@ -766,7 +832,9 @@ function StandingsTable({
         <thead className="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
           <tr>
             <th className={`${cellClass} font-semibold`}>#</th>
-            <th className={`${cellClass} font-semibold`}>Pilote</th>
+            <th className={`${cellClass} font-semibold`}>
+              {championship.mode === "team" ? "Équipe" : "Pilote"}
+            </th>
             <th className={`${cellClass} font-semibold`}>Points</th>
             <th className={`${cellClass} font-semibold`}>Courses</th>
             <th className={`${cellClass} font-semibold`}>Poles</th>
@@ -835,7 +903,7 @@ function ChampionshipPilotResults({
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-purple-100 bg-white px-4 py-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-purple-600">
-            Détail pilote
+            Détail {championship.mode === "team" ? "équipe" : "pilote"}
           </p>
           <h4 className="mt-0.5 text-lg font-black text-zinc-900">
             {standing.pilotName}
@@ -953,6 +1021,20 @@ function ChampionshipDrawer({
               defaultValue={championship?.name}
               required
             />
+
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-semibold text-zinc-700">
+                Type de championnat
+              </span>
+              <select
+                name="mode"
+                defaultValue={championship?.mode ?? "solo"}
+                className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-zinc-900 outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+              >
+                <option value="solo">Solo</option>
+                <option value="team">Équipe</option>
+              </select>
+            </label>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <ChampionshipField

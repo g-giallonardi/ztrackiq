@@ -1,6 +1,12 @@
+enum ChampionshipMode {
+  solo
+  team
+}
+
 model Championship {
   id               Int       @id @default(autoincrement())
   name             String
+  mode             ChampionshipMode @default(solo)
   startDate        DateTime
   endDate          DateTime?
   scoringMode      String    @default("ALL")

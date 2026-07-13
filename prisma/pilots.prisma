@@ -23,6 +23,7 @@ model Pilot {
 
   cars        Car[]
   raceResults RaceResult[]
+  raceTeamMembers RaceTeamMember[]
 
   @@index([lastname, firstname])
   @@index([clubId])
