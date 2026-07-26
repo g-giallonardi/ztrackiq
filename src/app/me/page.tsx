@@ -5,14 +5,25 @@ import {
   LockKeyhole,
   Medal,
   Phone,
+  Plus,
   Save,
   Trophy,
   User,
 } from "lucide-react";
+import Link from "next/link";
+import {
+  DismissibleDrawer,
+  DrawerCloseButton,
+} from "@/components/DismissibleDrawer";
 import { requireCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { SubmitButton } from "@/components/SubmitButton";
-import { changeMyPassword, updateMyProfile } from "./actions";
+import {
+  changeMyPassword,
+  deleteMyCar,
+  saveMyCar,
+  updateMyProfile,
+} from "./actions";
 
 type PilotProfile = {
   id: number;
@@ -52,8 +63,23 @@ type RecentResult = {
 type CarRow = {
   id: number;
   name: string;
-  raceCount: number | bigint;
-  bestResult: number | null;
+  chipId: string | null;
+  specs: {
+    specId: number;
+    spec: {
+      id: number;
+      name: string;
+      piValue: number;
+      categoryId: number;
+      category: {
+        id: number;
+        name: string;
+      };
+    };
+  }[];
+  raceResults: {
+    position: number;
+  }[];
 };
 
 function formatPilotDisplayName(pilot: {
@@ -92,6 +118,16 @@ function formatBestLap(bestLapMs: number | null | undefined) {
     : seconds.toFixed(3);
 }
 
+function formatPiClass(value: number) {
+  const pi = Math.min(999, Math.round(value));
+
+  return pi > 500 ? "X" : pi > 400 ? "S" : pi > 300 ? "A" : pi > 200 ? "B" : "C";
+}
+
+function getCarTotalPi(car: { specs: { spec: { piValue: number } }[] }) {
+  return car.specs.reduce((sum, carSpec) => sum + carSpec.spec.piValue, 0);
+}
+
 function readNumber(value: number | bigint | null | undefined) {
   return Number(value ?? 0);
 }
@@ -103,6 +139,11 @@ export default async function MePage({
     saved?: string;
     passwordSaved?: string;
     passwordError?: string;
+    carSaved?: string;
+    carDeleted?: string;
+    drawer?: string;
+    carId?: string;
+    confirmDelete?: string;
   }>;
 }) {
   const user = await requireCurrentUser();
@@ -129,7 +170,7 @@ export default async function MePage({
     throw new Error("Pilote introuvable");
   }
 
-  const [statsRows, recentResults, cars, clubs] =
+  const [statsRows, recentResults, cars, clubs, specCategories] =
     await Promise.all([
       prisma.$queryRaw<PilotStats[]>`
         SELECT
@@ -162,20 +203,36 @@ export default async function MePage({
         ORDER BY "Race"."raceDate" DESC, "Race"."createdAt" DESC
         LIMIT 5
       `,
-      prisma.$queryRaw<CarRow[]>`
-        SELECT
-          "Car"."id",
-          "Car"."name",
-          COUNT("RaceResult"."id")::int AS "raceCount",
-          MIN("RaceResult"."position")::int AS "bestResult"
-        FROM "Car"
-        LEFT JOIN "RaceResult" ON "RaceResult"."carId" = "Car"."id"
-        WHERE "Car"."pilotId" = ${user.id}
-        GROUP BY "Car"."id", "Car"."name", "Car"."createdAt"
-        ORDER BY "Car"."createdAt" ASC, "Car"."name" ASC
-      `,
+      prisma.car.findMany({
+        where: { pilotId: user.id },
+        include: {
+          specs: {
+            include: {
+              spec: {
+                include: {
+                  category: true,
+                },
+              },
+            },
+          },
+          raceResults: {
+            select: {
+              position: true,
+            },
+          },
+        },
+        orderBy: [{ createdAt: "asc" }, { name: "asc" }],
+      }),
       prisma.club.findMany({
         orderBy: [{ default: "desc" }, { name: "asc" }],
+      }),
+      prisma.specCategory.findMany({
+        include: {
+          specs: {
+            orderBy: [{ piValue: "asc" }, { name: "asc" }],
+          },
+        },
+        orderBy: { name: "asc" },
       }),
     ]);
 
@@ -184,6 +241,14 @@ export default async function MePage({
   const wins = readNumber(stats?.wins);
   const podiums = readNumber(stats?.podiums);
   const podiumRate = races > 0 ? Math.round((podiums / races) * 100) : 0;
+  const drawerMode = params?.drawer;
+  const selectedCarId = params?.carId ? Number(params.carId) : null;
+  const selectedCar = selectedCarId
+    ? cars.find((car) => car.id === selectedCarId)
+    : null;
+  const isCarDrawerOpen = drawerMode === "add" || drawerMode === "edit";
+  const isDeleteModalOpen =
+    drawerMode === "edit" && params?.confirmDelete === "1";
 
   return (
     <div className="m-2 rounded bg-white p-2 text-gray-900">
@@ -217,6 +282,16 @@ export default async function MePage({
       {params?.passwordSaved === "1" && (
         <div className="mb-4 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">
           Mot de passe mis à jour.
+        </div>
+      )}
+      {params?.carSaved === "1" && (
+        <div className="mb-4 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">
+          Voiture enregistrée.
+        </div>
+      )}
+      {params?.carDeleted === "1" && (
+        <div className="mb-4 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">
+          Voiture supprimée.
         </div>
       )}
       {params?.passwordError && (
@@ -322,29 +397,51 @@ export default async function MePage({
           </div>
 
           <div className="mt-5">
-            <h3 className="mb-2 text-sm font-black uppercase text-zinc-600">
-              Mes voitures
-            </h3>
+            <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <h3 className="text-sm font-black uppercase text-zinc-600">
+                Mes voitures
+              </h3>
+              <Link
+                href="/me?drawer=add"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-zinc-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-pink-600 sm:w-auto"
+              >
+                <Plus size="16" />
+                Ajouter une voiture
+              </Link>
+            </div>
             <div className="grid gap-2 md:grid-cols-2">
-              {cars.map((car) => (
-                <div
-                  key={car.id}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate font-semibold text-zinc-900">
-                      {car.name}
-                    </p>
-                    <p className="text-xs text-zinc-500">
-                      {readNumber(car.raceCount)} course
-                      {readNumber(car.raceCount) > 1 ? "s" : ""}
-                    </p>
-                  </div>
-                  <p className="text-sm font-black text-purple-600">
-                    {car.bestResult ? `P${car.bestResult}` : "-"}
-                  </p>
-                </div>
-              ))}
+              {cars.map((car) => {
+                const raceCount = car.raceResults.length;
+                const bestResult =
+                  car.raceResults.length > 0
+                    ? Math.min(...car.raceResults.map((result) => result.position))
+                    : null;
+                const piValue = getCarTotalPi(car);
+
+                return (
+                  <Link
+                    key={car.id}
+                    href={`/me?drawer=edit&carId=${car.id}`}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 transition hover:border-pink-400 hover:bg-white"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-zinc-900">
+                        {car.name}
+                      </p>
+                      <p className="text-xs text-zinc-500">
+                        {raceCount} course{raceCount > 1 ? "s" : ""}
+                        {car.chipId ? ` · ${car.chipId}` : ""}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <PiBadge rank={formatPiClass(piValue)} value={piValue} />
+                      <p className="text-sm font-black text-purple-600">
+                        {bestResult ? `P${bestResult}` : "-"}
+                      </p>
+                    </div>
+                  </Link>
+                );
+              })}
               {cars.length === 0 && (
                 <div className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50 p-4 text-sm text-zinc-500">
                   Aucune voiture associée.
@@ -461,6 +558,16 @@ export default async function MePage({
           </section>
         </div>
       </div>
+
+      {isCarDrawerOpen && (
+        <MyCarDrawer
+          key={`${drawerMode}-${selectedCarId ?? "new"}`}
+          mode={drawerMode}
+          car={selectedCar}
+          specCategories={specCategories}
+          showDeleteModal={isDeleteModalOpen}
+        />
+      )}
     </div>
   );
 }
@@ -509,6 +616,221 @@ function MiniStat({ label, value }: { label: string; value: string }) {
     <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
       <p className="text-xs font-semibold uppercase text-zinc-500">{label}</p>
       <p className="mt-1 truncate text-lg font-black text-zinc-900">{value}</p>
+    </div>
+  );
+}
+
+function PiBadge({ rank, value }: { rank: string; value: number }) {
+  const color =
+    rank === "X"
+      ? "border-purple-500 bg-purple-500"
+      : rank === "S"
+        ? "border-red-500 bg-red-500"
+        : rank === "A"
+          ? "border-blue-500 bg-blue-500"
+          : rank === "B"
+            ? "border-yellow-500 bg-yellow-500"
+            : "border-zinc-500 bg-zinc-500";
+
+  return (
+    <span className={`inline-flex overflow-hidden rounded border text-[10px] font-black ${color}`}>
+      <span className="px-1 text-white">{rank}</span>
+      <span className="bg-white px-1 text-zinc-900">{Math.round(value)}</span>
+    </span>
+  );
+}
+
+function MyCarDrawer({
+  mode,
+  car,
+  specCategories,
+  showDeleteModal,
+}: {
+  mode: string | undefined;
+  car?: CarRow | null;
+  specCategories: {
+    id: number;
+    name: string;
+    specs: {
+      id: number;
+      name: string;
+      piValue: number;
+    }[];
+  }[];
+  showDeleteModal: boolean;
+}) {
+  const isEdit = mode === "edit";
+
+  return (
+    <DismissibleDrawer>
+      <div className="fixed inset-0 z-50 flex justify-end bg-black/30 backdrop-blur-sm">
+        <DrawerCloseButton className="flex-1" ariaLabel="Fermer le volet" />
+
+        <aside className="h-full w-full max-w-md overflow-y-auto bg-white p-6 shadow-2xl">
+          <div className="mb-6 flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-wide text-pink-500">
+                {isEdit ? "Modification" : "Création"}
+              </p>
+              <h2 className="mt-1 text-2xl font-black text-zinc-900">
+                {isEdit ? "Modifier ma voiture" : "Ajouter une voiture"}
+              </h2>
+            </div>
+
+            <DrawerCloseButton className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-600 transition hover:border-pink-500 hover:text-pink-600">
+              Fermer
+            </DrawerCloseButton>
+          </div>
+
+          {isEdit && !car ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              Voiture introuvable.
+            </div>
+          ) : (
+            <form action={saveMyCar} className="space-y-5">
+              <ProfileField
+                label="Nom"
+                name="name"
+                defaultValue={car?.name ?? ""}
+                required
+              />
+
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-bold text-zinc-900">Améliorations</p>
+                    <p className="text-xs text-zinc-500">
+                      Une spec par catégorie, le PI est calculé depuis ces choix.
+                    </p>
+                  </div>
+                  <div className="rounded-md bg-white p-2 text-pink-500 shadow-sm">
+                    <Gauge size="20" />
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {specCategories.length === 0 && (
+                    <div className="rounded-lg border border-dashed border-zinc-300 bg-white p-4 text-sm text-zinc-500">
+                      Aucune amélioration disponible.
+                    </div>
+                  )}
+
+                  {specCategories.map((category) => {
+                    const selectedSpecId = car?.specs.find(
+                      (carSpec) => carSpec.spec.categoryId === category.id,
+                    )?.specId;
+
+                    return (
+                      <label key={category.id} className="block">
+                        <span className="mb-1 block text-sm font-semibold text-zinc-700">
+                          {category.name}
+                        </span>
+                        <select
+                          name="specIds"
+                          defaultValue={selectedSpecId ?? ""}
+                          className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-zinc-900 outline-none transition focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20"
+                        >
+                          <option value="">Stock / aucune</option>
+                          {category.specs.map((spec) => (
+                            <option key={spec.id} value={spec.id}>
+                              {spec.name} ({spec.piValue >= 0 ? "+" : ""}
+                              {spec.piValue} PI)
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-4 rounded-lg border border-dashed border-pink-200 bg-white p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                    Classe PI actuelle
+                  </p>
+                  <p className="mt-1 text-3xl font-black text-pink-500">
+                    {car
+                      ? formatPiClass(getCarTotalPi(car))
+                      : "Calculée à l’enregistrement"}
+                  </p>
+                </div>
+              </div>
+
+              <ProfileField
+                label="Puce de comptage"
+                name="chipId"
+                defaultValue={car?.chipId ?? ""}
+              />
+
+              {car && <input type="hidden" name="id" value={car.id} />}
+
+              <div className="flex items-center justify-between gap-3 border-t border-zinc-100 pt-5">
+                {car ? (
+                  <Link
+                    href={`/me?drawer=edit&carId=${car.id}&confirmDelete=1`}
+                    className="rounded-md border border-red-200 bg-red-50 px-4 py-2 font-semibold text-red-600 transition hover:bg-red-100"
+                  >
+                    Supprimer
+                  </Link>
+                ) : (
+                  <span />
+                )}
+
+                <div className="flex gap-3">
+                  <Link
+                    href="/me"
+                    className="rounded-md border border-zinc-200 px-4 py-2 font-semibold text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50"
+                  >
+                    Annuler
+                  </Link>
+                  <SubmitButton>
+                    {isEdit ? "Enregistrer" : "Créer la voiture"}
+                  </SubmitButton>
+                </div>
+              </div>
+            </form>
+          )}
+        </aside>
+
+        {showDeleteModal && car && <DeleteMyCarModal car={car} />}
+      </div>
+    </DismissibleDrawer>
+  );
+}
+
+function DeleteMyCarModal({ car }: { car: { id: number; name: string } }) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+        <p className="text-sm font-semibold uppercase tracking-wide text-red-500">
+          Suppression
+        </p>
+        <h3 className="mt-1 text-2xl font-black text-zinc-900">
+          Supprimer cette voiture ?
+        </h3>
+        <p className="mt-3 text-sm text-zinc-600">
+          Tu vas supprimer définitivement{" "}
+          <span className="font-semibold text-zinc-900">{car.name}</span>.
+        </p>
+
+        <div className="mt-6 flex justify-end gap-3">
+          <Link
+            href={`/me?drawer=edit&carId=${car.id}`}
+            className="rounded-md border border-zinc-200 px-4 py-2 font-semibold text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50"
+          >
+            Annuler
+          </Link>
+
+          <form action={deleteMyCar}>
+            <input type="hidden" name="id" value={car.id} />
+            <button
+              type="submit"
+              className="rounded-md bg-red-600 px-4 py-2 font-semibold text-white shadow-sm transition hover:bg-red-700"
+            >
+              Confirmer la suppression
+            </button>
+          </form>
+        </div>
+      </div>
     </div>
   );
 }

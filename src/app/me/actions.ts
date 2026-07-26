@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { Prisma } from "@prisma/client";
 import { requireCurrentUser } from "@/lib/auth";
+import { auditLog } from "@/lib/audit";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
 
@@ -121,6 +122,137 @@ export async function changeMyPassword(formData: FormData) {
 
   revalidatePath("/me");
   redirect("/me?passwordSaved=1");
+}
+
+export async function saveMyCar(formData: FormData) {
+  const user = await requireCurrentUser();
+  const id = toNullableNumber(formData.get("id"));
+  const name = requiredString(formData.get("name"), "Le nom");
+  const chipId = optionalString(formData.get("chipId"));
+  const specIds = formData
+    .getAll("specIds")
+    .map((value) => Number(value.toString().trim()))
+    .filter((value) => Number.isInteger(value) && value > 0);
+
+  await prisma.$transaction(async (tx) => {
+    if (id) {
+      const before = await tx.car.findFirst({
+        where: { id, pilotId: user.id },
+      });
+
+      if (!before) {
+        throw new Error("Voiture introuvable");
+      }
+
+      const car = await tx.car.update({
+        where: { id },
+        data: {
+          name,
+          chipId,
+          basePi: 0,
+        },
+      });
+
+      await tx.carSpec.deleteMany({
+        where: { carId: id },
+      });
+
+      if (specIds.length > 0) {
+        await tx.carSpec.createMany({
+          data: specIds.map((specId) => ({
+            carId: id,
+            specId,
+          })),
+        });
+      }
+
+      await auditLog(
+        {
+          actorId: user.id,
+          actorName: getPilotDisplayName(user),
+          action: "UPDATE",
+          entity: "Car",
+          entityId: id,
+          before,
+          after: car,
+        },
+        tx,
+      );
+    } else {
+      const car = await tx.car.create({
+        data: {
+          name,
+          chipId,
+          basePi: 0,
+          pilotId: user.id,
+        },
+      });
+
+      if (specIds.length > 0) {
+        await tx.carSpec.createMany({
+          data: specIds.map((specId) => ({
+            carId: car.id,
+            specId,
+          })),
+        });
+      }
+
+      await auditLog(
+        {
+          actorId: user.id,
+          actorName: getPilotDisplayName(user),
+          action: "CREATE",
+          entity: "Car",
+          entityId: car.id,
+          after: car,
+        },
+        tx,
+      );
+    }
+  });
+
+  revalidatePath("/me");
+  revalidatePath("/cars");
+  redirect("/me?carSaved=1");
+}
+
+export async function deleteMyCar(formData: FormData) {
+  const user = await requireCurrentUser();
+  const id = toNullableNumber(formData.get("id"));
+
+  if (!id) {
+    throw new Error("Identifiant voiture manquant");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const before = await tx.car.findFirst({
+      where: { id, pilotId: user.id },
+    });
+
+    if (!before) {
+      throw new Error("Voiture introuvable");
+    }
+
+    await tx.car.delete({
+      where: { id },
+    });
+
+    await auditLog(
+      {
+        actorId: user.id,
+        actorName: getPilotDisplayName(user),
+        action: "DELETE",
+        entity: "Car",
+        entityId: id,
+        before,
+      },
+      tx,
+    );
+  });
+
+  revalidatePath("/me");
+  revalidatePath("/cars");
+  redirect("/me?carDeleted=1");
 }
 
 function requiredString(value: FormDataEntryValue | null, label: string) {
