@@ -6,20 +6,11 @@ import type { Prisma } from "@prisma/client";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-type RaceActionRow = {
-  id: number;
-  name: string;
-  mode: "solo" | "team";
-  raceDate: Date;
-  trackId: number | null;
-  championshipId: number | null;
-  location: string | null;
-  notes: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
 type RaceMode = "solo" | "team";
+
+function toAuditJson(value: unknown) {
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
 
 function nullableString(value: FormDataEntryValue | null) {
   const str = value?.toString().trim();
@@ -145,15 +136,19 @@ function getTeamRaceResults(formData: FormData) {
 }
 
 async function resolveTrackId(tx: Prisma.TransactionClient, trackName: string) {
-  const [track] = await tx.$queryRaw<{ id: number }[]>`
-    INSERT INTO "Track" ("name", "createdAt", "updatedAt")
-    VALUES (${trackName}, NOW(), NOW())
-    ON CONFLICT ("name")
-    DO UPDATE SET
-      "name" = EXCLUDED."name",
-      "updatedAt" = "Track"."updatedAt"
-    RETURNING "id"
-  `;
+  const existingTrack = await tx.track.findUnique({
+    where: { name: trackName },
+    select: { id: true },
+  });
+
+  if (existingTrack) {
+    return existingTrack.id;
+  }
+
+  const track = await tx.track.create({
+    data: { name: trackName },
+    select: { id: true },
+  });
 
   return track.id;
 }
@@ -166,16 +161,20 @@ async function resolveChampionshipId(
 ) {
   if (!championshipId) return null;
 
-  const [championship] = await tx.$queryRaw<{ id: number }[]>`
-    SELECT "id"
-    FROM "Championship"
-    WHERE
-      "id" = ${championshipId}
-      AND "mode" = ${raceMode}::"ChampionshipMode"
-      AND "startDate" <= NOW()
-      AND "startDate" <= ${raceDate}
-      AND ("endDate" IS NULL OR "endDate" >= ${raceDate})
-  `;
+  const championship = await tx.championship.findFirst({
+    where: {
+      id: championshipId,
+      mode: raceMode,
+      startDate: { lte: new Date() },
+      AND: [
+        { startDate: { lte: raceDate } },
+        {
+          OR: [{ endDate: null }, { endDate: { gte: raceDate } }],
+        },
+      ],
+    },
+    select: { id: true },
+  });
 
   if (!championship) {
     throw new Error("Le championnat sélectionné n'est pas compatible avec cette session");
@@ -189,37 +188,20 @@ async function replaceRaceResults(
   raceId: number,
   results: ReturnType<typeof getRaceResults>,
 ) {
-  await tx.$executeRaw`
-    DELETE FROM "RaceResult"
-    WHERE "raceId" = ${raceId}
-  `;
-  await tx.$executeRaw`
-    DELETE FROM "RaceTeam"
-    WHERE "raceId" = ${raceId}
-  `;
+  await tx.raceResult.deleteMany({ where: { raceId } });
+  await tx.raceTeam.deleteMany({ where: { raceId } });
 
-  for (const result of results) {
-    await tx.$executeRaw`
-      INSERT INTO "RaceResult" (
-        "raceId",
-        "pilotId",
-        "position",
-        "laps",
-        "bestLapMs",
-        "createdAt",
-        "updatedAt"
-      )
-      VALUES (
-        ${raceId},
-        ${result.pilotId},
-        ${result.carId},
-        ${result.position},
-        ${result.laps},
-        ${result.bestLapMs},
-        NOW(),
-        NOW()
-      )
-    `;
+  if (results.length > 0) {
+    await tx.raceResult.createMany({
+      data: results.map((result) => ({
+        raceId,
+        pilotId: result.pilotId,
+        carId: result.carId,
+        position: result.position,
+        laps: result.laps,
+        bestLapMs: result.bestLapMs,
+      })),
+    });
   }
 }
 
@@ -228,50 +210,33 @@ async function replaceTeamRaceResults(
   raceId: number,
   results: ReturnType<typeof getTeamRaceResults>,
 ) {
-  await tx.$executeRaw`
-    DELETE FROM "RaceResult"
-    WHERE "raceId" = ${raceId}
-  `;
-  await tx.$executeRaw`
-    DELETE FROM "RaceTeam"
-    WHERE "raceId" = ${raceId}
-  `;
+  await tx.raceResult.deleteMany({ where: { raceId } });
+  await tx.raceTeam.deleteMany({ where: { raceId } });
 
   for (const result of results) {
-    const [team] = await tx.$queryRaw<{ id: number }[]>`
-      INSERT INTO "RaceTeam" ("raceId", "name", "createdAt", "updatedAt")
-      VALUES (${raceId}, ${result.teamName}, NOW(), NOW())
-      RETURNING "id"
-    `;
+    const team = await tx.raceTeam.create({
+      data: {
+        raceId,
+        name: result.teamName,
+        members: {
+          createMany: {
+            data: result.memberIds.map((pilotId) => ({ pilotId })),
+            skipDuplicates: true,
+          },
+        },
+      },
+      select: { id: true },
+    });
 
-    for (const pilotId of result.memberIds) {
-      await tx.$executeRaw`
-        INSERT INTO "RaceTeamMember" ("raceTeamId", "pilotId")
-        VALUES (${team.id}, ${pilotId})
-        ON CONFLICT ("raceTeamId", "pilotId") DO NOTHING
-      `;
-    }
-
-    await tx.$executeRaw`
-      INSERT INTO "RaceResult" (
-        "raceId",
-        "teamId",
-        "position",
-        "laps",
-        "bestLapMs",
-        "createdAt",
-        "updatedAt"
-      )
-      VALUES (
-        ${raceId},
-        ${team.id},
-        ${result.position},
-        ${result.laps},
-        ${result.bestLapMs},
-        NOW(),
-        NOW()
-      )
-    `;
+    await tx.raceResult.create({
+      data: {
+        raceId,
+        teamId: team.id,
+        position: result.position,
+        laps: result.laps,
+        bestLapMs: result.bestLapMs,
+      },
+    });
   }
 }
 
@@ -301,50 +266,26 @@ export async function saveRace(formData: FormData) {
     );
 
     if (id) {
-      const [before] = await tx.$queryRaw<RaceActionRow[]>`
-        SELECT
-          "id",
-          "name",
-          "mode",
-          "raceDate",
-          "trackId",
-          "championshipId",
-          "location",
-          "notes",
-          "createdAt",
-          "updatedAt"
-        FROM "Race"
-        WHERE "id" = ${id}
-      `;
+      const before = await tx.race.findUnique({
+        where: { id },
+      });
 
       if (!before) {
         throw new Error("Course introuvable");
       }
 
-      const [race] = await tx.$queryRaw<RaceActionRow[]>`
-        UPDATE "Race"
-        SET
-          "name" = ${data.name},
-          "mode" = ${data.mode}::"RaceMode",
-          "raceDate" = ${data.raceDate},
-          "trackId" = ${trackId},
-          "championshipId" = ${championshipId},
-          "location" = ${data.trackName},
-          "notes" = ${data.notes},
-          "updatedAt" = NOW()
-        WHERE "id" = ${id}
-        RETURNING
-          "id",
-          "name",
-          "mode",
-          "raceDate",
-          "trackId",
-          "championshipId",
-          "location",
-          "notes",
-          "createdAt",
-          "updatedAt"
-      `;
+      const race = await tx.race.update({
+        where: { id },
+        data: {
+          name: data.name,
+          mode: data.mode,
+          raceDate: data.raceDate,
+          trackId,
+          championshipId,
+          location: data.trackName,
+          notes: data.notes,
+        },
+      });
 
       if (data.mode === "team") {
         await replaceTeamRaceResults(
@@ -365,46 +306,22 @@ export async function saveRace(formData: FormData) {
           action: "UPDATE",
           entity: "Race",
           entityId: id,
-          before,
-          after: race,
+          before: toAuditJson(before),
+          after: toAuditJson(race),
         },
       });
     } else {
-      const [race] = await tx.$queryRaw<RaceActionRow[]>`
-        INSERT INTO "Race" (
-          "name",
-          "mode",
-          "raceDate",
-          "trackId",
-          "championshipId",
-          "location",
-          "notes",
-          "createdAt",
-          "updatedAt"
-        )
-        VALUES (
-          ${data.name},
-          ${data.mode}::"RaceMode",
-          ${data.raceDate},
-          ${trackId},
-          ${championshipId},
-          ${data.trackName},
-          ${data.notes},
-          NOW(),
-          NOW()
-        )
-        RETURNING
-          "id",
-          "name",
-          "mode",
-          "raceDate",
-          "trackId",
-          "championshipId",
-          "location",
-          "notes",
-          "createdAt",
-          "updatedAt"
-      `;
+      const race = await tx.race.create({
+        data: {
+          name: data.name,
+          mode: data.mode,
+          raceDate: data.raceDate,
+          trackId,
+          championshipId,
+          location: data.trackName,
+          notes: data.notes,
+        },
+      });
 
       if (data.mode === "team") {
         await replaceTeamRaceResults(
@@ -425,7 +342,7 @@ export async function saveRace(formData: FormData) {
           action: "CREATE",
           entity: "Race",
           entityId: race.id,
-          after: race,
+          after: toAuditJson(race),
         },
       });
     }
@@ -445,37 +362,24 @@ export async function deleteRace(formData: FormData) {
   }
 
   await prisma.$transaction(async (tx) => {
-    const [before] = await tx.$queryRaw<RaceActionRow[]>`
-      SELECT
-      "id",
-      "name",
-      "mode",
-      "raceDate",
-        "trackId",
-        "championshipId",
-        "location",
-        "notes",
-        "createdAt",
-        "updatedAt"
-      FROM "Race"
-      WHERE "id" = ${id}
-    `;
+    const before = await tx.race.findUnique({
+      where: { id },
+    });
 
     if (!before) {
       throw new Error("Course introuvable");
     }
 
-    await tx.$executeRaw`
-      DELETE FROM "Race"
-      WHERE "id" = ${id}
-    `;
+    await tx.race.delete({
+      where: { id },
+    });
 
     await tx.auditLog.create({
       data: {
         action: "DELETE",
         entity: "Race",
         entityId: id,
-        before,
+        before: toAuditJson(before),
       },
     });
   });

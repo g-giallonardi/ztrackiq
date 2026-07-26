@@ -7,29 +7,6 @@ import { requireCurrentUser } from "@/lib/auth";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
 
-type PilotProfileRow = {
-  id: number;
-  firstname: string;
-  lastname: string | null;
-  nickname: string | null;
-  email: string;
-  phone: string | null;
-  clubId: number | null;
-  active: boolean;
-  role: string;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-type PilotPasswordRow = {
-  id: number;
-  passwordHash: string;
-  firstname: string;
-  lastname: string | null;
-  nickname: string | null;
-  active: boolean;
-};
-
 export async function updateMyProfile(formData: FormData) {
   const user = await requireCurrentUser();
   const firstname = requiredString(formData.get("firstname"), "Le prénom");
@@ -40,51 +17,25 @@ export async function updateMyProfile(formData: FormData) {
   const clubId = toNullableNumber(formData.get("clubId"));
 
   await prisma.$transaction(async (tx) => {
-    const [before] = await tx.$queryRaw<PilotProfileRow[]>`
-      SELECT
-        "id",
-        "firstname",
-        "lastname",
-        "nickname",
-        "email",
-        "phone",
-        "clubId",
-        "active",
-        "role"::text AS "role",
-        "createdAt",
-        "updatedAt"
-      FROM "Pilot"
-      WHERE "id" = ${user.id}
-    `;
+    const before = await tx.pilot.findUnique({
+      where: { id: user.id },
+    });
 
     if (!before || !before.active) {
       throw new Error("Pilote introuvable");
     }
 
-    const [updated] = await tx.$queryRaw<PilotProfileRow[]>`
-      UPDATE "Pilot"
-      SET
-        "firstname" = ${firstname},
-        "lastname" = ${lastname},
-        "nickname" = ${nickname},
-        "email" = ${email},
-        "phone" = ${phone},
-        "clubId" = ${clubId},
-        "updatedAt" = NOW()
-      WHERE "id" = ${user.id}
-      RETURNING
-        "id",
-        "firstname",
-        "lastname",
-        "nickname",
-        "email",
-        "phone",
-        "clubId",
-        "active",
-        "role"::text AS "role",
-        "createdAt",
-        "updatedAt"
-    `;
+    const updated = await tx.pilot.update({
+      where: { id: user.id },
+      data: {
+        firstname,
+        lastname,
+        nickname,
+        email,
+        phone,
+        clubId,
+      },
+    });
 
     await tx.auditLog.create({
       data: {
@@ -127,19 +78,19 @@ export async function changeMyPassword(formData: FormData) {
     redirect("/me?passwordError=mismatch");
   }
 
-  const [pilot] = await prisma.$queryRaw<PilotPasswordRow[]>`
-    SELECT
-      "id",
-      "passwordHash",
-      "firstname",
-      "lastname",
-      "nickname",
-      "active"
-    FROM "Pilot"
-    WHERE "id" = ${user.id}
-  `;
+  const pilot = await prisma.pilot.findUnique({
+    where: { id: user.id },
+    select: {
+      id: true,
+      passwordHash: true,
+      firstname: true,
+      lastname: true,
+      nickname: true,
+      active: true,
+    },
+  });
 
-  if (!pilot || !pilot.active) {
+  if (!pilot || !pilot.active || !pilot.passwordHash) {
     redirect("/login");
   }
 

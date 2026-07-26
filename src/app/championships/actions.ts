@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import type { Prisma } from "@prisma/client";
+import { ChampionshipMode, type Prisma } from "@prisma/client";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -17,19 +17,6 @@ const DEFAULT_POINTS = {
   8: 4,
   9: 2,
   10: 1,
-};
-
-type ChampionshipActionRow = {
-  id: number;
-  name: string;
-  mode: "solo" | "team";
-  startDate: Date;
-  endDate: Date | null;
-  scoringMode: string;
-  bestRaceCount: number | null;
-  pointsByPosition: unknown;
-  createdAt: Date;
-  updatedAt: Date;
 };
 
 function nullableNumber(value: FormDataEntryValue | null) {
@@ -104,8 +91,11 @@ export async function saveChampionship(formData: FormData) {
     scoringMode === "BEST"
       ? Math.max(1, nullableNumber(formData.get("bestRaceCount")) ?? 1)
       : null;
-  const pointsJson = JSON.stringify(getPointsByPosition(formData));
-  const mode = formData.get("mode")?.toString() === "team" ? "team" : "solo";
+  const pointsByPosition = getPointsByPosition(formData);
+  const mode =
+    formData.get("mode")?.toString() === "team"
+      ? ChampionshipMode.team
+      : ChampionshipMode.solo;
   const data = {
     name: requiredString(formData.get("name"), "Le nom"),
     mode,
@@ -117,50 +107,26 @@ export async function saveChampionship(formData: FormData) {
 
   await prisma.$transaction(async (tx) => {
     if (id) {
-      const [before] = await tx.$queryRaw<ChampionshipActionRow[]>`
-        SELECT
-          "id",
-          "name",
-          "mode",
-          "startDate",
-          "endDate",
-          "scoringMode",
-          "bestRaceCount",
-          "pointsByPosition",
-          "createdAt",
-          "updatedAt"
-        FROM "Championship"
-        WHERE "id" = ${id}
-      `;
+      const before = await tx.championship.findUnique({
+        where: { id },
+      });
 
       if (!before) {
         throw new Error("Championnat introuvable");
       }
 
-      const [championship] = await tx.$queryRaw<ChampionshipActionRow[]>`
-        UPDATE "Championship"
-        SET
-          "name" = ${data.name},
-          "mode" = ${data.mode}::"ChampionshipMode",
-          "startDate" = ${data.startDate},
-          "endDate" = ${data.endDate},
-          "scoringMode" = ${data.scoringMode},
-          "bestRaceCount" = ${data.bestRaceCount},
-          "pointsByPosition" = ${pointsJson}::jsonb,
-          "updatedAt" = NOW()
-        WHERE "id" = ${id}
-        RETURNING
-          "id",
-          "name",
-          "mode",
-          "startDate",
-          "endDate",
-          "scoringMode",
-          "bestRaceCount",
-          "pointsByPosition",
-          "createdAt",
-          "updatedAt"
-      `;
+      const championship = await tx.championship.update({
+        where: { id },
+        data: {
+          name: data.name,
+          mode: data.mode,
+          startDate: data.startDate,
+          endDate: data.endDate,
+          scoringMode: data.scoringMode,
+          bestRaceCount: data.bestRaceCount,
+          pointsByPosition,
+        },
+      });
 
       await tx.auditLog.create({
         data: {
@@ -172,41 +138,17 @@ export async function saveChampionship(formData: FormData) {
         },
       });
     } else {
-      const [championship] = await tx.$queryRaw<ChampionshipActionRow[]>`
-        INSERT INTO "Championship" (
-          "name",
-          "mode",
-          "startDate",
-          "endDate",
-          "scoringMode",
-          "bestRaceCount",
-          "pointsByPosition",
-          "createdAt",
-          "updatedAt"
-        )
-        VALUES (
-          ${data.name},
-          ${data.mode}::"ChampionshipMode",
-          ${data.startDate},
-          ${data.endDate},
-          ${data.scoringMode},
-          ${data.bestRaceCount},
-          ${pointsJson}::jsonb,
-          NOW(),
-          NOW()
-        )
-        RETURNING
-          "id",
-          "name",
-          "mode",
-          "startDate",
-          "endDate",
-          "scoringMode",
-          "bestRaceCount",
-          "pointsByPosition",
-          "createdAt",
-          "updatedAt"
-      `;
+      const championship = await tx.championship.create({
+        data: {
+          name: data.name,
+          mode: data.mode,
+          startDate: data.startDate,
+          endDate: data.endDate,
+          scoringMode: data.scoringMode,
+          bestRaceCount: data.bestRaceCount,
+          pointsByPosition,
+        },
+      });
 
       await tx.auditLog.create({
         data: {
@@ -233,30 +175,17 @@ export async function deleteChampionship(formData: FormData) {
   }
 
   await prisma.$transaction(async (tx) => {
-    const [before] = await tx.$queryRaw<ChampionshipActionRow[]>`
-      SELECT
-      "id",
-      "name",
-      "mode",
-      "startDate",
-        "endDate",
-        "scoringMode",
-        "bestRaceCount",
-        "pointsByPosition",
-        "createdAt",
-        "updatedAt"
-      FROM "Championship"
-      WHERE "id" = ${id}
-    `;
+    const before = await tx.championship.findUnique({
+      where: { id },
+    });
 
     if (!before) {
       throw new Error("Championnat introuvable");
     }
 
-    await tx.$executeRaw`
-      DELETE FROM "Championship"
-      WHERE "id" = ${id}
-    `;
+    await tx.championship.delete({
+      where: { id },
+    });
 
     await tx.auditLog.create({
       data: {
