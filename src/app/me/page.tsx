@@ -17,6 +17,7 @@ import {
 } from "@/components/DismissibleDrawer";
 import { requireCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { formatBestLap, formatPiClass, getCarTotalPi } from "@/lib/racing";
 import { SubmitButton } from "@/components/SubmitButton";
 import {
   changeMyPassword,
@@ -104,28 +105,6 @@ function formatDate(date: Date) {
     month: "short",
     year: "numeric",
   }).format(date);
-}
-
-function formatBestLap(bestLapMs: number | null | undefined) {
-  if (!bestLapMs) return "-";
-
-  const totalSeconds = bestLapMs / 1000;
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds - minutes * 60;
-
-  return minutes > 0
-    ? `${minutes}:${seconds.toFixed(3).padStart(6, "0")}`
-    : seconds.toFixed(3);
-}
-
-function formatPiClass(value: number) {
-  const pi = Math.min(999, Math.round(value));
-
-  return pi > 500 ? "X" : pi > 400 ? "S" : pi > 300 ? "A" : pi > 200 ? "B" : "C";
-}
-
-function getCarTotalPi(car: { specs: { spec: { piValue: number } }[] }) {
-  return car.specs.reduce((sum, carSpec) => sum + carSpec.spec.piValue, 0);
 }
 
 function readNumber(value: number | bigint | null | undefined) {

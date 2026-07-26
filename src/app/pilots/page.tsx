@@ -11,6 +11,7 @@ import {
   getPilotDisplayName as getShortPilotDisplayName,
 } from "@/lib/pilotDisplay";
 import { prisma } from "@/lib/prisma";
+import { formatBestLap } from "@/lib/racing";
 import {
   Activity,
   Car,
@@ -72,18 +73,6 @@ function formatDate(date: Date) {
     month: "short",
     year: "numeric",
   }).format(date);
-}
-
-function formatBestLap(bestLapMs: number | null | undefined) {
-  if (!bestLapMs) return "-";
-
-  const totalSeconds = bestLapMs / 1000;
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds - minutes * 60;
-
-  return minutes > 0
-    ? `${minutes}:${seconds.toFixed(3).padStart(6, "0")}`
-    : seconds.toFixed(3);
 }
 
 function readNumber(value: number | bigint | null | undefined) {

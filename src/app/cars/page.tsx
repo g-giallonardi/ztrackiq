@@ -9,6 +9,7 @@ import {
 import { SubmitButton } from "@/components/SubmitButton";
 import { requireCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { formatPiClass, getCarTotalPi } from "@/lib/racing";
 import {
   CarFront,
   Gauge,
@@ -23,23 +24,6 @@ import {
 } from "@/lib/pilotDisplay";
 import { deleteCar, saveCar } from "./actions";
 import { CarsTable, type CarTableRow } from "./CarsTable";
-
-function formatPiClass(value: number) {
-  const pi = Math.min(999, Math.round(value));
-
-  const rank =
-    pi > 500 ? "X" :
-    pi > 400 ? "S" :
-    pi > 300 ? "A" :
-    pi > 200 ? "B" :
-    "C";
-
-  return `${rank}`;
-}
-
-function getCarTotalPi(car: { specs: { spec: { piValue: number } }[] }) {
-  return car.specs.reduce((sum, carSpec) => sum + carSpec.spec.piValue, 0);
-}
 
 function getCarSpecValue(
   car: { specs: { spec: { category: { name: string }; name: string } }[] },

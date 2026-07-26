@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import type { Prisma } from "@prisma/client";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { parseBestLapMs } from "@/lib/racing";
 
 type RaceMode = "solo" | "team";
 
@@ -52,23 +53,6 @@ function requiredDate(value: FormDataEntryValue | null, field: string) {
   }
 
   return date;
-}
-
-function parseBestLapMs(value: FormDataEntryValue | null) {
-  const str = value?.toString().trim().replace(",", ".");
-  if (!str) return null;
-
-  const parts = str.split(":");
-  const seconds =
-    parts.length === 1
-      ? Number(parts[0])
-      : parts.length === 2
-        ? Number(parts[0]) * 60 + Number(parts[1])
-        : Number.NaN;
-
-  if (Number.isNaN(seconds) || seconds < 0) return null;
-
-  return Math.round(seconds * 1000);
 }
 
 function getRaceResults(formData: FormData) {
