@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
-    "build": "next build",
+    "build": "prisma generate --schema prisma && next build",
     "start": "next start",
     "lint": "eslint"
   },
@@ -35,8 +35,5 @@
     "prisma": "^6.19.3",
     "tailwindcss": "^4.3.1",
     "typescript": "^5"
-  },
-  "prisma": {
-    "schema": "./prisma"
   }
 }
