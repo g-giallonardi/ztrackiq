@@ -969,9 +969,6 @@ function RaceSessionModal({
                             carById,
                             carByPilotId,
                           );
-                          const isBestLap =
-                            result.bestLapMs !== null &&
-                            result.bestLapMs === raceBestLap;
                           const isUnderSessionAverage =
                             result.bestLapMs !== null &&
                             averageBestLap !== null &&
