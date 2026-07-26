@@ -11,6 +11,7 @@ import {
   getPilotDisplayName,
 } from "@/lib/pilotDisplay";
 import { prisma } from "@/lib/prisma";
+import { formatPiClass, getCarTotalPi } from "@/lib/racing";
 import {
   CalendarDays,
   Clock,
@@ -77,23 +78,6 @@ type CarWithPiSpecs = {
   pilotId: number;
   specs: { spec: { piValue: number } }[];
 };
-
-function formatPiClass(value: number) {
-  const pi = Math.min(999, Math.round(value));
-
-  const rank =
-    pi > 500 ? "X" :
-    pi > 400 ? "S" :
-    pi > 300 ? "A" :
-    pi > 200 ? "B" :
-    "C";
-
-  return rank;
-}
-
-function getCarTotalPi(car: { specs: { spec: { piValue: number } }[] }) {
-  return car.specs.reduce((sum, carSpec) => sum + carSpec.spec.piValue, 0);
-}
 
 function formatRaceDate(date: Date) {
   return new Intl.DateTimeFormat("fr-FR", {
@@ -985,9 +969,6 @@ function RaceSessionModal({
                             carById,
                             carByPilotId,
                           );
-                          const isBestLap =
-                            result.bestLapMs !== null &&
-                            result.bestLapMs === raceBestLap;
                           const isUnderSessionAverage =
                             result.bestLapMs !== null &&
                             averageBestLap !== null &&

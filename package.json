@@ -6,7 +6,9 @@
     "dev": "next dev --webpack",
     "build": "prisma generate --schema prisma && next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -34,6 +36,7 @@
     "eslint-config-next": "16.2.9",
     "prisma": "^6.19.3",
     "tailwindcss": "^4.3.1",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.7"
   }
 }

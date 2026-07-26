@@ -12,6 +12,7 @@ import {
   getPilotDisplayName,
 } from "@/lib/pilotDisplay";
 import { prisma } from "@/lib/prisma";
+import { formatPiClass, getCarTotalPi } from "@/lib/racing";
 import { deleteChampionship, saveChampionship } from "./actions";
 
 const DEFAULT_POINTS: Record<number, number> = {
@@ -92,23 +93,6 @@ type StandingRaceResult = {
   points: number;
   counted: boolean;
 };
-
-function formatPiClass(value: number) {
-  const pi = Math.min(999, Math.round(value));
-
-  const rank =
-    pi > 500 ? "X" :
-    pi > 400 ? "S" :
-    pi > 300 ? "A" :
-    pi > 200 ? "B" :
-    "C";
-
-  return rank;
-}
-
-function getCarTotalPi(car: { specs: { spec: { piValue: number } }[] }) {
-  return car.specs.reduce((sum, carSpec) => sum + carSpec.spec.piValue, 0);
-}
 
 function formatDate(date: Date) {
   return new Intl.DateTimeFormat("fr-FR", {
