@@ -5,10 +5,6 @@ import { AUTH_COOKIE_NAME } from "@/lib/authConstants";
 import { createJwtToken, verifyJwtToken } from "@/lib/jwt";
 import type { AuthUser } from "@/types/auth";
 
-type PilotAuthRow = AuthUser & {
-  active: boolean;
-};
-
 export async function createAuthToken(user: {
   id: number;
   role: string;
@@ -27,22 +23,20 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   const session = await verifyAuthToken(token);
   if (!session) return null;
 
-  const [pilot] = await prisma.$queryRaw<PilotAuthRow[]>`
-    SELECT
-      "id",
-      "firstname",
-      "lastname",
-      "nickname",
-      "email",
-      "role"::text AS "role",
-      "active"
-    FROM "Pilot"
-    WHERE "id" = ${session.userId}
-      AND "email" IS NOT NULL
-      AND "role" IS NOT NULL
-  `;
+  const pilot = await prisma.pilot.findUnique({
+    where: { id: session.userId },
+    select: {
+      id: true,
+      firstname: true,
+      lastname: true,
+      nickname: true,
+      email: true,
+      role: true,
+      active: true,
+    },
+  });
 
-  if (!pilot || !pilot.active) return null;
+  if (!pilot || !pilot.active || !pilot.email || !pilot.role) return null;
 
   return {
     id: pilot.id,

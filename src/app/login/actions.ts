@@ -11,14 +11,6 @@ export type LoginState = {
   error?: string;
 };
 
-type LoginPilotRow = {
-  id: number;
-  email: string;
-  passwordHash: string;
-  role: string;
-  active: boolean;
-};
-
 function requiredString(value: FormDataEntryValue | null) {
   const str = value?.toString().trim();
 
@@ -36,22 +28,31 @@ export async function login(
   const email = requiredString(formData.get("email")).toLowerCase();
   const password = requiredString(formData.get("password"));
 
-  const [pilot] = await prisma.$queryRaw<LoginPilotRow[]>`
-    SELECT
-      "id",
-      "email",
-      "passwordHash",
-      "role"::text AS "role",
-      "active"
-    FROM "Pilot"
-    WHERE LOWER("email") = ${email}
-      AND "email" IS NOT NULL
-      AND "passwordHash" IS NOT NULL
-      AND "role" IS NOT NULL
-    LIMIT 1
-  `;
+  const pilot = await prisma.pilot.findFirst({
+    where: {
+      email: {
+        equals: email,
+        mode: "insensitive",
+      },
+      passwordHash: { not: null },
+      role: { not: null },
+    },
+    select: {
+      id: true,
+      email: true,
+      passwordHash: true,
+      role: true,
+      active: true,
+    },
+  });
 
-  if (!pilot || !pilot.active || !verifyPassword(password, pilot.passwordHash)) {
+  if (
+    !pilot ||
+    !pilot.active ||
+    !pilot.passwordHash ||
+    !pilot.role ||
+    !verifyPassword(password, pilot.passwordHash)
+  ) {
     return { error: "Email ou mot de passe incorrect" };
   }
 

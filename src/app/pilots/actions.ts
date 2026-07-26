@@ -3,23 +3,8 @@
 
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
-import type { Prisma } from "@prisma/client";
+import { PilotRole, type Prisma } from "@prisma/client";
 import { requireAdmin } from "@/lib/auth";
-
-type PilotActionRow = {
-  id: number;
-  firstname: string;
-  lastname: string | null;
-  nickname: string | null;
-  email: string | null;
-  passwordHash: string | null;
-  role: string | null;
-  phone: string | null;
-  active: boolean;
-  clubId: number | null;
-  createdAt: Date;
-  updatedAt: Date;
-};
 
 const DEFAULT_PASSWORD_HASH =
   "sha256:e7cd9662965741e20f58915fb0eb0f52696c786c0529d02c316db538bd6ead99";
@@ -50,77 +35,39 @@ export async function savePilot(formData: FormData) {
 
   await prisma.$transaction(async (tx) => {
     const pilotId = id ? Number(id) : null;
-    const [existingEmailOwner] = data.email
-      ? pilotId
-        ? await tx.$queryRaw<{ id: number }[]>`
-          SELECT "id"
-          FROM "Pilot"
-          WHERE lower("email") = lower(${data.email})
-            AND "id" <> ${pilotId}
-          LIMIT 1
-        `
-        : await tx.$queryRaw<{ id: number }[]>`
-          SELECT "id"
-          FROM "Pilot"
-          WHERE lower("email") = lower(${data.email})
-          LIMIT 1
-        `
-      : [];
+    const existingEmailOwner = data.email
+      ? await tx.pilot.findFirst({
+          where: {
+            email: {
+              equals: data.email,
+              mode: "insensitive",
+            },
+            ...(pilotId ? { id: { not: pilotId } } : {}),
+          },
+          select: { id: true },
+        })
+      : null;
 
     if (existingEmailOwner) {
       throw new Error("Cette adresse email est déjà utilisée");
     }
 
     if (pilotId) {
-      const [before] = await tx.$queryRaw<PilotActionRow[]>`
-        SELECT
-          "id",
-          "firstname",
-          "lastname",
-          "nickname",
-          "email",
-          "passwordHash",
-          "role"::text AS "role",
-          "phone",
-          "active",
-          "clubId",
-          "createdAt",
-          "updatedAt"
-        FROM "Pilot"
-        WHERE "id" = ${pilotId}
-      `;
+      const before = await tx.pilot.findUnique({
+        where: { id: pilotId },
+      });
 
-      const [updated] = await tx.$queryRaw<PilotActionRow[]>`
-        UPDATE "Pilot"
-        SET
-          "firstname" = ${data.firstname},
-          "lastname" = ${data.lastname},
-          "nickname" = ${data.nickname},
-          "email" = ${data.email},
-          "passwordHash" = CASE
-            WHEN ${data.role}::text IS NULL THEN NULL
-            ELSE COALESCE("passwordHash", ${DEFAULT_PASSWORD_HASH})
-          END,
-          "role" = ${data.role}::"PilotRole",
-          "phone" = ${data.phone},
-          "clubId" = ${data.clubId},
-          "active" = ${data.active},
-          "updatedAt" = NOW()
-        WHERE "id" = ${pilotId}
-        RETURNING
-          "id",
-          "firstname",
-          "lastname",
-          "nickname",
-          "email",
-          "passwordHash",
-          "role"::text AS "role",
-          "phone",
-          "active",
-          "clubId",
-          "createdAt",
-          "updatedAt"
-      `;
+      if (!before) {
+        throw new Error("Pilote introuvable");
+      }
+
+      const updated = await tx.pilot.update({
+        where: { id: pilotId },
+        data: {
+          ...data,
+          passwordHash: data.role ? before.passwordHash ?? DEFAULT_PASSWORD_HASH : null,
+        },
+      });
 
       await tx.auditLog.create({
         data: {
@@ -132,47 +79,12 @@ export async function savePilot(formData: FormData) {
         },
       });
     } else {
-      const [created] = await tx.$queryRaw<PilotActionRow[]>`
-        INSERT INTO "Pilot" (
-          "firstname",
-          "lastname",
-          "nickname",
-          "email",
-          "passwordHash",
-          "role",
-          "phone",
-          "clubId",
-          "active",
-          "createdAt",
-          "updatedAt"
-        )
-        VALUES (
-          ${data.firstname},
-          ${data.lastname},
-          ${data.nickname},
-          ${data.email},
-          ${data.role ? DEFAULT_PASSWORD_HASH : null},
-          ${data.role}::"PilotRole",
-          ${data.phone},
-          ${data.clubId},
-          ${data.active},
-          NOW(),
-          NOW()
-        )
-        RETURNING
-          "id",
-          "firstname",
-          "lastname",
-          "nickname",
-          "email",
-          "passwordHash",
-          "role"::text AS "role",
-          "phone",
-          "active",
-          "clubId",
-          "createdAt",
-          "updatedAt"
-      `;
+      const created = await tx.pilot.create({
+        data: {
+          ...data,
+          passwordHash: data.role ? DEFAULT_PASSWORD_HASH : null,
+        },
+      });
 
       await tx.auditLog.create({
         data: {
@@ -261,7 +173,7 @@ function optionalRole(value: FormDataEntryValue | null) {
     throw new Error("Rôle invalide");
   }
 
-  return role;
+  return PilotRole[role];
 }
 
 function toAuditJson(value: unknown): Prisma.InputJsonValue | undefined {
