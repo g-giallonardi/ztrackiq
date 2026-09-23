@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import {
   flexRender,
   getCoreRowModel,
@@ -11,10 +11,11 @@ import {
   type Column,
   type ColumnDef,
   type ColumnFiltersState,
+  type Row,
   type SortingState,
   useReactTable,
 } from "@tanstack/react-table";
-import { MapPin, Pencil, Trophy } from "lucide-react";
+import { CalendarDays, MapPin, Pencil, Trophy } from "lucide-react";
 
 export type RaceTableRow = {
   id: number;
@@ -60,6 +61,31 @@ function RaceModeTag({ mode }: { mode: "solo" | "team" }) {
       {mode === "team" ? "Équipe" : "Solo"}
     </span>
   );
+}
+
+function getSessionGroups(rows: Row<RaceTableRow>[]) {
+  const groups: {
+    sessionDate: string;
+    sessionLabel: string;
+    rows: typeof rows;
+  }[] = [];
+
+  for (const row of rows) {
+    const previousGroup = groups.at(-1);
+
+    if (previousGroup?.sessionDate === row.original.raceDate) {
+      previousGroup.rows.push(row);
+      continue;
+    }
+
+    groups.push({
+      sessionDate: row.original.raceDate,
+      sessionLabel: row.original.raceDateLabel,
+      rows: [row],
+    });
+  }
+
+  return groups;
 }
 
 function ColumnFilter({
@@ -268,6 +294,9 @@ export function RacesTable({
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
   });
+  const rowModel = table.getRowModel();
+  const sessionGroups = getSessionGroups(rowModel.rows);
+  const pageCount = Math.max(1, table.getPageCount());
 
   return (
     <div className="space-y-4">
@@ -297,75 +326,86 @@ export function RacesTable({
         </button>
       </div>
 
-      <div className="space-y-3 md:hidden">
-        {table.getRowModel().rows.map((row) => {
-          const race = row.original;
-
-          return (
-            <div
-              key={row.id}
-              className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm"
+      <div className="space-y-5 md:hidden">
+        {sessionGroups.map((group) => (
+          <section key={group.sessionDate} className="space-y-3">
+            <Link
+              href={`/races?sessionDate=${group.sessionDate}`}
+              className="flex items-center justify-between gap-3 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm font-black text-zinc-800 transition hover:border-pink-300 hover:text-pink-600"
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-start gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-pink-100 text-pink-600">
-                    <Trophy size="20" />
-                  </div>
-                  <div className="min-w-0">
-                    <Link
-                      href={`/races?detailsRaceId=${race.id}`}
-                      className="block truncate font-black text-zinc-900 transition hover:text-pink-600 hover:underline"
-                    >
-                      {race.name}
-                    </Link>
-                    <Link
-                      href={`/races?sessionDate=${race.raceDate}`}
-                      className="mt-0.5 block text-sm font-semibold text-zinc-600 transition hover:text-pink-600 hover:underline"
-                    >
-                      {race.raceDateLabel}
-                    </Link>
-                    {race.notes && (
-                      <p className="mt-1 line-clamp-2 text-sm text-zinc-500">
-                        {race.notes}
-                      </p>
+              <span className="inline-flex min-w-0 items-center gap-2">
+                <CalendarDays size="16" className="shrink-0 text-pink-500" />
+                <span className="truncate">{group.sessionLabel}</span>
+              </span>
+              <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-bold text-zinc-600 ring-1 ring-inset ring-zinc-200">
+                {group.rows.length} course{group.rows.length > 1 ? "s" : ""}
+              </span>
+            </Link>
+
+            {group.rows.map((row) => {
+              const race = row.original;
+
+              return (
+                <div
+                  key={row.id}
+                  className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-pink-100 text-pink-600">
+                        <Trophy size="20" />
+                      </div>
+                      <div className="min-w-0">
+                        <Link
+                          href={`/races?detailsRaceId=${race.id}`}
+                          className="block truncate font-black text-zinc-900 transition hover:text-pink-600 hover:underline"
+                        >
+                          {race.name}
+                        </Link>
+                        {race.notes && (
+                          <p className="mt-1 line-clamp-2 text-sm text-zinc-500">
+                            {race.notes}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {canManage && (
+                      <Link
+                        href={`/races?drawer=edit&raceId=${race.id}`}
+                        className="inline-flex shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 transition hover:border-cyan-500 hover:text-cyan-600"
+                        aria-label={`Modifier ${race.name}`}
+                      >
+                        <Pencil size="16" />
+                      </Link>
                     )}
                   </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-600 ring-1 ring-inset ring-zinc-500/20">
+                      <MapPin size="13" />
+                      {race.trackName ?? "Circuit inconnu"}
+                    </span>
+                    <RaceModeTag mode={race.mode} />
+                    {race.championshipName && (
+                      <span className="inline-flex items-center rounded-full bg-purple-50 px-3 py-1 text-xs font-semibold text-purple-700 ring-1 ring-inset ring-purple-600/20">
+                        {race.championshipName}
+                      </span>
+                    )}
+                    <span className="inline-flex items-center rounded-full bg-cyan-50 px-3 py-1 text-xs font-semibold text-cyan-700 ring-1 ring-inset ring-cyan-600/20">
+                      {race.pilotCount} pilote{race.pilotCount > 1 ? "s" : ""}
+                    </span>
+                    <span className="inline-flex items-center rounded-full bg-pink-50 px-3 py-1 text-xs font-semibold text-pink-700 ring-1 ring-inset ring-pink-600/20">
+                      {race.bestLap}
+                    </span>
+                  </div>
                 </div>
+              );
+            })}
+          </section>
+        ))}
 
-                {canManage && (
-                  <Link
-                    href={`/races?drawer=edit&raceId=${race.id}`}
-                    className="inline-flex shrink-0 rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 transition hover:border-cyan-500 hover:text-cyan-600"
-                    aria-label={`Modifier ${race.name}`}
-                  >
-                    <Pencil size="16" />
-                  </Link>
-                )}
-              </div>
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-600 ring-1 ring-inset ring-zinc-500/20">
-                  <MapPin size="13" />
-                  {race.trackName ?? "Circuit inconnu"}
-                </span>
-                <RaceModeTag mode={race.mode} />
-                {race.championshipName && (
-                  <span className="inline-flex items-center rounded-full bg-purple-50 px-3 py-1 text-xs font-semibold text-purple-700 ring-1 ring-inset ring-purple-600/20">
-                    {race.championshipName}
-                  </span>
-                )}
-                <span className="inline-flex items-center rounded-full bg-cyan-50 px-3 py-1 text-xs font-semibold text-cyan-700 ring-1 ring-inset ring-cyan-600/20">
-                  {race.pilotCount} pilote{race.pilotCount > 1 ? "s" : ""}
-                </span>
-                <span className="inline-flex items-center rounded-full bg-pink-50 px-3 py-1 text-xs font-semibold text-pink-700 ring-1 ring-inset ring-pink-600/20">
-                  {race.bestLap}
-                </span>
-              </div>
-            </div>
-          );
-        })}
-
-        {table.getRowModel().rows.length === 0 && (
+        {rowModel.rows.length === 0 && (
           <div className="rounded-xl border border-zinc-200 bg-white px-5 py-10 text-center text-zinc-500">
             Aucune course ne correspond aux filtres.
           </div>
@@ -411,22 +451,42 @@ export function RacesTable({
           </thead>
 
           <tbody className="divide-y divide-zinc-100">
-            {table.getRowModel().rows.map((row) => (
-              <tr key={row.id} className="transition hover:bg-zinc-50">
-                {row.getVisibleCells().map((cell) => (
-                  <td
-                    key={cell.id}
-                    className={`px-5 py-2 text-zinc-600 ${
-                      cell.column.id === "name" ? "text-zinc-900" : ""
-                    } ${cell.column.id === "actions" ? "text-right" : ""}`}
-                  >
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+            {sessionGroups.map((group) => (
+              <Fragment key={group.sessionDate}>
+                <tr className="bg-zinc-50/80">
+                  <td colSpan={columns.length} className="px-5 py-3">
+                    <Link
+                      href={`/races?sessionDate=${group.sessionDate}`}
+                      className="inline-flex items-center gap-2 font-black text-zinc-800 transition hover:text-pink-600 hover:underline"
+                    >
+                      <CalendarDays size="16" className="text-pink-500" />
+                      {group.sessionLabel}
+                    </Link>
+                    <span className="ml-3 text-xs font-semibold text-zinc-500">
+                      {group.rows.length} course
+                      {group.rows.length > 1 ? "s" : ""}
+                    </span>
                   </td>
+                </tr>
+
+                {group.rows.map((row) => (
+                  <tr key={row.id} className="transition hover:bg-zinc-50">
+                    {row.getVisibleCells().map((cell) => (
+                      <td
+                        key={cell.id}
+                        className={`px-5 py-2 text-zinc-600 ${
+                          cell.column.id === "name" ? "text-zinc-900" : ""
+                        } ${cell.column.id === "actions" ? "text-right" : ""}`}
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </td>
+                    ))}
+                  </tr>
                 ))}
-              </tr>
+              </Fragment>
             ))}
 
-            {table.getRowModel().rows.length === 0 && (
+            {rowModel.rows.length === 0 && (
               <tr>
                 <td
                   colSpan={columns.length}
@@ -458,7 +518,7 @@ export function RacesTable({
           </button>
           <span>
             Page {table.getState().pagination.pageIndex + 1} /{" "}
-            {table.getPageCount()}
+            {pageCount}
           </span>
           <button
             type="button"
