@@ -8,6 +8,7 @@ model Race {
   name           String
   mode           RaceMode      @default(solo)
   raceDate       DateTime
+  sessionOrder   Int           @default(0)
   trackId        Int?
   track          Track?        @relation(fields: [trackId], references: [id], onDelete: SetNull)
   championshipId Int?
@@ -20,6 +21,7 @@ model Race {
   updatedAt      DateTime      @updatedAt
 
   @@index([raceDate])
+  @@index([raceDate, sessionOrder])
   @@index([trackId])
   @@index([championshipId])
 }

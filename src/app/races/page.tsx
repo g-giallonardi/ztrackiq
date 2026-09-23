@@ -19,7 +19,7 @@ import {
   Plus,
   Trophy,
 } from "lucide-react";
-import { deleteRace, saveRace } from "./actions";
+import { deleteRace, reorderRacesInSession, saveRace } from "./actions";
 import { RaceChampionshipFields } from "./RaceChampionshipFields";
 import { RaceResultsFields } from "./RaceResultsFields";
 import { RaceTeamResultsFields } from "./RaceTeamResultsFields";
@@ -30,6 +30,7 @@ type RaceRow = {
   name: string;
   mode: "solo" | "team";
   raceDate: Date;
+  sessionOrder: number;
   trackId: number | null;
   championshipId: number | null;
   championshipName: string | null;
@@ -250,6 +251,7 @@ export default async function RacesPage({
         "Race"."name",
         "Race"."mode"::text AS "mode",
         "Race"."raceDate",
+        "Race"."sessionOrder",
         "Race"."trackId",
         "Race"."championshipId",
         "Championship"."name" AS "championshipName",
@@ -261,7 +263,7 @@ export default async function RacesPage({
       FROM "Race"
       LEFT JOIN "Track" ON "Track"."id" = "Race"."trackId"
       LEFT JOIN "Championship" ON "Championship"."id" = "Race"."championshipId"
-      ORDER BY "Race"."raceDate" DESC, "Race"."id" ASC
+      ORDER BY "Race"."raceDate" DESC, "Race"."sessionOrder" ASC, "Race"."id" ASC
     `,
     prisma.pilot.findMany({
       orderBy: [{ lastname: "asc" }, { firstname: "asc" }],
@@ -352,6 +354,7 @@ export default async function RacesPage({
     notes: race.notes,
     raceDate: formatRaceDateForInput(race.raceDate),
     raceDateLabel: formatRaceDate(race.raceDate),
+    sessionOrder: race.sessionOrder,
     trackId: race.trackId,
     trackName: race.trackName,
     championshipName: race.championshipName,
@@ -438,7 +441,12 @@ export default async function RacesPage({
         />
       </div>
 
-      <RacesTable races={raceTableRows} tracks={tracks} canManage={canManage} />
+      <RacesTable
+        races={raceTableRows}
+        tracks={tracks}
+        canManage={canManage}
+        reorderRacesInSession={reorderRacesInSession}
+      />
 
       {canManage && isDrawerOpen && (
         <RaceDrawer
