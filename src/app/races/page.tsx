@@ -386,7 +386,11 @@ export default async function RacesPage({
   const sessionRaces = sessionDate
     ? races
         .filter((race) => formatRaceDateForInput(race.raceDate) === sessionDate)
-        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+        .sort(
+          (a, b) =>
+            a.sessionOrder - b.sessionOrder ||
+            a.id - b.id,
+        )
     : [];
 
   const isDrawerOpen = drawerMode === "add" || drawerMode === "edit";
