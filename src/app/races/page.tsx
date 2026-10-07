@@ -5,7 +5,7 @@ import {
   DrawerCloseButton,
 } from "@/components/DismissibleDrawer";
 import { SubmitButton } from "@/components/SubmitButton";
-import { requireCurrentUser } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 import {
   buildDuplicateFirstnameSet,
   getPilotDisplayName,
@@ -231,8 +231,8 @@ export default async function RacesPage({
     confirmDelete?: string;
   }>;
 }) {
-  const currentUser = await requireCurrentUser();
-  const canManage = currentUser.role === "admin";
+  const currentUser = await getCurrentUser();
+  const canManage = currentUser?.role === "admin";
 
   const params = await searchParams;
 
@@ -266,6 +266,13 @@ export default async function RacesPage({
       ORDER BY "Race"."raceDate" DESC, "Race"."sessionOrder" ASC, "Race"."id" ASC
     `,
     prisma.pilot.findMany({
+      select: {
+        id: true,
+        firstname: true,
+        lastname: true,
+        nickname: true,
+        active: true,
+      },
       orderBy: [{ lastname: "asc" }, { firstname: "asc" }],
     }),
     prisma.$queryRaw<TrackRow[]>`
@@ -279,11 +286,22 @@ export default async function RacesPage({
       ORDER BY "startDate" DESC, "createdAt" ASC
     `,
     prisma.car.findMany({
-      include: {
-        pilot: true,
+      select: {
+        id: true,
+        name: true,
+        pilotId: true,
+        pilot: {
+          select: {
+            firstname: true,
+            lastname: true,
+            nickname: true,
+          },
+        },
         specs: {
-          include: {
-            spec: true,
+          select: {
+            spec: {
+              select: { piValue: true },
+            },
           },
         },
       },
@@ -583,11 +601,12 @@ function RaceDrawer({
 }) {
   const isEdit = mode === "edit";
   const slotCount = Math.max(8, pilots.length, race?.results.length ?? 0);
+  const resultByPosition = new Map(
+    race?.results.map((result) => [result.position, result]) ?? [],
+  );
   const resultSlots = Array.from({ length: slotCount }, (_, index) => {
     const position = index + 1;
-    const result = race?.results.find(
-      (raceResult) => raceResult.position === position,
-    );
+    const result = resultByPosition.get(position);
 
     return {
       position,
@@ -605,9 +624,7 @@ function RaceDrawer({
   });
   const teamResultSlots = Array.from({ length: slotCount }, (_, index) => {
     const position = index + 1;
-    const result = race?.results.find(
-      (raceResult) => raceResult.position === position,
-    );
+    const result = resultByPosition.get(position);
 
     return {
       position,

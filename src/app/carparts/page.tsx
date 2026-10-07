@@ -7,7 +7,7 @@ import {
   DrawerCloseButton,
 } from "@/components/DismissibleDrawer";
 import { SubmitButton } from "@/components/SubmitButton";
-import { requireCurrentUser } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
   BadgePlus,
@@ -30,8 +30,8 @@ export default async function CarpartsPage({
     confirmDelete?: string;
   }>;
 }) {
-  const currentUser = await requireCurrentUser();
-  const canManage = currentUser.role === "admin";
+  const currentUser = await getCurrentUser();
+  const canManage = currentUser?.role === "admin";
 
   const [specs, categories] = await Promise.all([
     prisma.spec.findMany({

@@ -9,6 +9,20 @@ import { requireAdmin } from "@/lib/auth";
 const DEFAULT_PASSWORD_HASH =
   "sha256:e7cd9662965741e20f58915fb0eb0f52696c786c0529d02c316db538bd6ead99";
 
+const PILOT_AUDIT_SELECT = {
+  id: true,
+  firstname: true,
+  lastname: true,
+  nickname: true,
+  email: true,
+  role: true,
+  phone: true,
+  active: true,
+  clubId: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.PilotSelect;
+
 export async function savePilot(formData: FormData) {
   await requireAdmin();
 
@@ -55,18 +69,25 @@ export async function savePilot(formData: FormData) {
     if (pilotId) {
       const before = await tx.pilot.findUnique({
         where: { id: pilotId },
+        select: {
+          ...PILOT_AUDIT_SELECT,
+          passwordHash: true,
+        },
       });
 
       if (!before) {
         throw new Error("Pilote introuvable");
       }
 
+      const { passwordHash, ...beforeAudit } = before;
+
       const updated = await tx.pilot.update({
         where: { id: pilotId },
         data: {
           ...data,
-          passwordHash: data.role ? before.passwordHash ?? DEFAULT_PASSWORD_HASH : null,
+          passwordHash: data.role ? passwordHash ?? DEFAULT_PASSWORD_HASH : null,
         },
+        select: PILOT_AUDIT_SELECT,
       });
 
       await tx.auditLog.create({
@@ -74,7 +95,7 @@ export async function savePilot(formData: FormData) {
           action: "UPDATE",
           entity: "Pilot",
           entityId: updated.id,
-          before: toAuditJson(before),
+          before: toAuditJson(beforeAudit),
           after: toAuditJson(updated),
         },
       });
@@ -84,6 +105,7 @@ export async function savePilot(formData: FormData) {
           ...data,
           passwordHash: data.role ? DEFAULT_PASSWORD_HASH : null,
         },
+        select: PILOT_AUDIT_SELECT,
       });
 
       await tx.auditLog.create({
@@ -112,6 +134,7 @@ export async function deletePilot(formData: FormData) {
   await prisma.$transaction(async (tx) => {
     const before = await tx.pilot.findUnique({
       where: { id },
+      select: PILOT_AUDIT_SELECT,
     });
 
     await tx.pilot.delete({

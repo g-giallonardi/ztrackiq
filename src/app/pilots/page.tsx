@@ -5,7 +5,7 @@ import {
   DrawerCloseButton,
 } from "@/components/DismissibleDrawer";
 import { SubmitButton } from "@/components/SubmitButton";
-import { requireCurrentUser } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 import {
   buildDuplicateFirstnameSet,
   getPilotDisplayName as getShortPilotDisplayName,
@@ -107,14 +107,27 @@ export default async function PilotsPage({
     confirmDelete?: string;
   }>;
 }) {
-  const currentUser = await requireCurrentUser();
-  const canManage = currentUser.role === "admin";
+  const currentUser = await getCurrentUser();
+  const canManage = currentUser?.role === "admin";
 
   const [pilots, clubs] = await Promise.all([
     prisma.pilot.findMany({
-      include: {
-        club: true,
+      select: {
+        id: true,
+        firstname: true,
+        lastname: true,
+        nickname: true,
+        email: true,
+        role: true,
+        phone: true,
+        active: true,
+        clubId: true,
+        createdAt: true,
+        club: {
+          select: { name: true },
+        },
         cars: {
+          select: { name: true },
           orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         },
       },
@@ -123,6 +136,11 @@ export default async function PilotsPage({
       },
     }),
     prisma.club.findMany({
+      select: {
+        id: true,
+        name: true,
+        default: true,
+      },
       orderBy: [{ default: "desc" }, { name: "asc" }],
     }),
   ]);
