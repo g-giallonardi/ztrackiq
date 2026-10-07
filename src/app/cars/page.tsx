@@ -7,7 +7,7 @@ import {
   DrawerCloseButton,
 } from "@/components/DismissibleDrawer";
 import { SubmitButton } from "@/components/SubmitButton";
-import { requireCurrentUser } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatPiClass, getCarTotalPi } from "@/lib/racing";
 import {
@@ -55,18 +55,39 @@ export default async function CarsPage({
     confirmDelete?: string;
   }>;
 }) {
-  const currentUser = await requireCurrentUser();
-  const canManage = currentUser.role === "admin";
+  const currentUser = await getCurrentUser();
+  const canManage = currentUser?.role === "admin";
 
   const [cars, pilots, specCategories] = await Promise.all([
     prisma.car.findMany({
-      include: {
-        pilot: true,
+      select: {
+        id: true,
+        name: true,
+        chipId: true,
+        pilotId: true,
+        pilot: {
+          select: {
+            id: true,
+            firstname: true,
+            lastname: true,
+            nickname: true,
+          },
+        },
         specs: {
-          include: {
+          select: {
+            specId: true,
             spec: {
-              include: {
-                category: true,
+              select: {
+                id: true,
+                name: true,
+                piValue: true,
+                categoryId: true,
+                category: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
               },
             },
           },
@@ -76,11 +97,24 @@ export default async function CarsPage({
     }),
     prisma.pilot.findMany({
       where: { active: true },
+      select: {
+        id: true,
+        firstname: true,
+        lastname: true,
+        nickname: true,
+      },
       orderBy: [{ lastname: "asc" }, { firstname: "asc" }],
     }),
     prisma.specCategory.findMany({
-      include: {
+      select: {
+        id: true,
+        name: true,
         specs: {
+          select: {
+            id: true,
+            name: true,
+            piValue: true,
+          },
           orderBy: [{ piValue: "asc" }, { name: "asc" }],
         },
       },
@@ -101,9 +135,16 @@ export default async function CarsPage({
 
   const chipCount = cars.filter((car) => Boolean(car.chipId)).length;
   const assignedCount = cars.filter((car) => Boolean(car.pilotId)).length;
-  const awdCount = cars.filter((car) => getCarSpecValue(car, "Transmission") === "AWD").length;
-  const rwdCount = cars.filter((car) => getCarSpecValue(car, "Transmission") === "RWD").length;
-  const fwdCount = cars.filter((car) => getCarSpecValue(car, "Transmission") === "FWD").length;
+  const transmissionCounts = cars.reduce(
+    (counts, car) => {
+      const transmission = getCarSpecValue(car, "Transmission");
+      if (transmission === "AWD") counts.awd += 1;
+      if (transmission === "RWD") counts.rwd += 1;
+      if (transmission === "FWD") counts.fwd += 1;
+      return counts;
+    },
+    { awd: 0, rwd: 0, fwd: 0 },
+  );
   const displayPilots = [
     ...new Map(
       [...pilots, ...cars.flatMap((car) => (car.pilot ? [car.pilot] : []))].map(
@@ -189,7 +230,7 @@ export default async function CarsPage({
           icon={<Waypoints />}
           color="text-purple-500"
           bgColor="bg-purple-100"
-          value={`${awdCount} / ${rwdCount} / ${fwdCount}`}
+          value={`${transmissionCounts.awd} / ${transmissionCounts.rwd} / ${transmissionCounts.fwd}`}
           label="AWD / RWD / FWD"
         />
       </div>

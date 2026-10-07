@@ -167,6 +167,19 @@ async function resolveChampionshipId(
   return championship.id;
 }
 
+async function getNextSessionOrder(
+  tx: Prisma.TransactionClient,
+  raceDate: Date,
+) {
+  const result = await tx.$queryRaw<{ nextOrder: number }[]>`
+    SELECT COALESCE(MAX("sessionOrder") + 1, 0)::int AS "nextOrder"
+    FROM "Race"
+    WHERE "raceDate" = ${raceDate}
+  `;
+
+  return result[0]?.nextOrder ?? 0;
+}
+
 async function replaceRaceResults(
   tx: Prisma.TransactionClient,
   raceId: number,
@@ -271,6 +284,14 @@ export async function saveRace(formData: FormData) {
         },
       });
 
+      if (before.raceDate.getTime() !== data.raceDate.getTime()) {
+        await tx.$executeRaw`
+          UPDATE "Race"
+          SET "sessionOrder" = ${await getNextSessionOrder(tx, data.raceDate)}
+          WHERE "id" = ${id}
+        `;
+      }
+
       if (data.mode === "team") {
         await replaceTeamRaceResults(
           tx,
@@ -295,6 +316,7 @@ export async function saveRace(formData: FormData) {
         },
       });
     } else {
+      const sessionOrder = await getNextSessionOrder(tx, data.raceDate);
       const race = await tx.race.create({
         data: {
           name: data.name,
@@ -306,6 +328,12 @@ export async function saveRace(formData: FormData) {
           notes: data.notes,
         },
       });
+
+      await tx.$executeRaw`
+        UPDATE "Race"
+        SET "sessionOrder" = ${sessionOrder}
+        WHERE "id" = ${race.id}
+      `;
 
       if (data.mode === "team") {
         await replaceTeamRaceResults(
@@ -334,6 +362,59 @@ export async function saveRace(formData: FormData) {
 
   revalidatePath("/races");
   redirect("/races");
+}
+
+export async function reorderRacesInSession(formData: FormData) {
+  await requireAdmin();
+
+  const sessionDate = requiredString(formData.get("sessionDate"), "La session");
+  const raceIds = formData
+    .getAll("raceIds")
+    .map((value) => nullableNumber(value))
+    .filter((id): id is number => id !== null);
+
+  if (raceIds.length === 0) {
+    throw new Error("Aucune course à réordonner");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const races = await tx.$queryRaw<{ id: number; raceDate: Date }[]>`
+      SELECT "id", "raceDate"
+      FROM "Race"
+      WHERE "id" = ANY(${raceIds})
+    `;
+
+    if (races.length !== raceIds.length) {
+      throw new Error("Certaines courses sont introuvables");
+    }
+
+    const hasOutsideSession = races.some(
+      (race) => race.raceDate.toISOString().slice(0, 10) !== sessionDate,
+    );
+
+    if (hasOutsideSession) {
+      throw new Error("Les courses doivent appartenir à la même session");
+    }
+
+    for (const [index, raceId] of raceIds.entries()) {
+      await tx.$executeRaw`
+        UPDATE "Race"
+        SET "sessionOrder" = ${index}
+        WHERE "id" = ${raceId}
+      `;
+    }
+
+    await tx.auditLog.create({
+      data: {
+        action: "UPDATE",
+        entity: "Race",
+        entityId: raceIds[0],
+        after: toAuditJson({ sessionDate, raceIds }),
+      },
+    });
+  });
+
+  revalidatePath("/races");
 }
 
 export async function deleteRace(formData: FormData) {

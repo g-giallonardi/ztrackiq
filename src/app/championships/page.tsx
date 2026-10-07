@@ -6,7 +6,7 @@ import {
   DrawerCloseButton,
 } from "@/components/DismissibleDrawer";
 import { SubmitButton } from "@/components/SubmitButton";
-import { requireCurrentUser } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 import {
   buildDuplicateFirstnameSet,
   getPilotDisplayName,
@@ -341,8 +341,8 @@ export default async function ChampionshipsPage({
     confirmDelete?: string;
   }>;
 }) {
-  const currentUser = await requireCurrentUser();
-  const canManage = currentUser.role === "admin";
+  const currentUser = await getCurrentUser();
+  const canManage = currentUser?.role === "admin";
 
   const [championships, raceResults, cars] = await Promise.all([
     prisma.$queryRaw<ChampionshipRow[]>`
@@ -418,6 +418,18 @@ export default async function ChampionshipsPage({
     ).values(),
   ];
   const duplicateFirstnames = buildDuplicateFirstnameSet(championshipPilots);
+  const raceResultsByChampionship = new Map<
+    number,
+    ChampionshipRaceResultRow[]
+  >();
+
+  for (const result of raceResults) {
+    if (!result.championshipId) continue;
+
+    const results = raceResultsByChampionship.get(result.championshipId) ?? [];
+    results.push(result);
+    raceResultsByChampionship.set(result.championshipId, results);
+  }
 
   const params = await searchParams;
   const drawerMode = params?.drawer;
@@ -497,9 +509,11 @@ export default async function ChampionshipsPage({
 
       <div className="space-y-4">
         {championships.map((championship) => {
+          const championshipResults =
+            raceResultsByChampionship.get(championship.id) ?? [];
           const standings = getStandings(
             championship,
-            raceResults,
+            championshipResults,
             carById,
             carByPilotId,
             duplicateFirstnames,
@@ -561,9 +575,11 @@ export default async function ChampionshipsPage({
 
       {detailsChampionship &&
         (() => {
+          const championshipResults =
+            raceResultsByChampionship.get(detailsChampionship.id) ?? [];
           const standings = getStandings(
             detailsChampionship,
-            raceResults,
+            championshipResults,
             carById,
             carByPilotId,
             duplicateFirstnames,
@@ -574,12 +590,15 @@ export default async function ChampionshipsPage({
               championship={detailsChampionship}
               standings={standings}
               selectedPilotId={championshipPilotId}
-              races={getChampionshipRaces(detailsChampionship, raceResults)}
+              races={getChampionshipRaces(
+                detailsChampionship,
+                championshipResults,
+              )}
               classStandings={PI_CLASSES.map((piClass) => ({
                 piClass,
                 standings: getStandings(
                   detailsChampionship,
-                  raceResults,
+                  championshipResults,
                   carById,
                   carByPilotId,
                   duplicateFirstnames,
@@ -588,9 +607,10 @@ export default async function ChampionshipsPage({
               }))}
               raceCount={
                 new Set(
-                  getChampionshipResults(detailsChampionship, raceResults).map(
-                    (result) => result.raceId,
-                  ),
+                  getChampionshipResults(
+                    detailsChampionship,
+                    championshipResults,
+                  ).map((result) => result.raceId),
                 ).size
               }
             />

@@ -1,13 +1,9 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Car, Flag, Trophy, Users, Wrench } from "lucide-react";
-import { requireCurrentUser } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { theme } from "@/lib/theme";
-
-type CountRow = {
-  count: number | bigint;
-};
 
 type AuditPayload = {
   name?: unknown;
@@ -16,16 +12,20 @@ type AuditPayload = {
   nickname?: unknown;
 };
 
-type RaceSummaryRow = {
-  totalResults: number | bigint | null;
+type DashboardStatsRow = {
+  activePilots: number;
+  inactivePilots: number;
+  registeredCars: number;
+  carChips: number;
+  trackCount: number;
+  specCount: number;
+  seasonRaces: number;
+  monthRaces: number;
+  upcomingRaces: number;
+  openChampionships: number;
   totalLaps: number | bigint | null;
   averageLaps: number | null;
-  bestLapMs: number | null;
 };
-
-function readCount(rows: CountRow[]) {
-  return Number(rows[0]?.count ?? 0);
-}
 
 function readMetric(value: number | bigint | null | undefined) {
   return Number(value ?? 0);
@@ -159,8 +159,8 @@ function formatRelativeDate(date: Date, now: Date) {
 }
 
 export default async function HomePage() {
-  const currentUser = await requireCurrentUser();
-  const canManage = currentUser.role === "admin";
+  const currentUser = await getCurrentUser();
+  const canManage = currentUser?.role === "admin";
 
   const now = new Date();
   const startOfYear = new Date(now.getFullYear(), 0, 1);
@@ -168,75 +168,55 @@ export default async function HomePage() {
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
-  const [
-    activePilots,
-    inactivePilots,
-    registeredCars,
-    carChipsRows,
-    trackCount,
-    specCount,
-    seasonRacesRows,
-    monthRacesRows,
-    upcomingRacesRows,
-    openChampionshipsRows,
-    raceSummaryRows,
-    recentActivities,
-  ] = await Promise.all([
-    prisma.pilot.count({ where: { active: true } }),
-    prisma.pilot.count({ where: { active: false } }),
-    prisma.car.count(),
-    prisma.$queryRaw<CountRow[]>`
-      SELECT COUNT(*)::int AS count
-      FROM "Car"
-      WHERE "chipId" IS NOT NULL
-    `,
-    prisma.track.count(),
-    prisma.spec.count(),
-    prisma.$queryRaw<CountRow[]>`
-      SELECT COUNT(*)::int AS count
-      FROM "Race"
-      WHERE "raceDate" >= ${startOfYear}
-        AND "raceDate" < ${startOfNextYear}
-    `,
-    prisma.$queryRaw<CountRow[]>`
-      SELECT COUNT(*)::int AS count
-      FROM "Race"
-      WHERE "raceDate" >= ${startOfMonth}
-        AND "raceDate" < ${startOfNextMonth}
-    `,
-    prisma.$queryRaw<CountRow[]>`
-      SELECT COUNT(*)::int AS count
-      FROM "Race"
-      WHERE "raceDate" >= ${now}
-    `,
-    prisma.$queryRaw<CountRow[]>`
-      SELECT COUNT(*)::int AS count
-      FROM "Championship"
-      WHERE "startDate" <= ${now}
-        AND ("endDate" IS NULL OR "endDate" >= ${now})
-    `,
-    prisma.$queryRaw<RaceSummaryRow[]>`
+  const [statsRows, recentActivities] = await Promise.all([
+    prisma.$queryRaw<DashboardStatsRow[]>`
       SELECT
-        COUNT(*)::int AS "totalResults",
-        COALESCE(SUM("laps"), 0)::int AS "totalLaps",
-        AVG("laps")::float AS "averageLaps",
-        MIN("bestLapMs")::int AS "bestLapMs"
-      FROM "RaceResult"
+        (SELECT COUNT(*)::int FROM "Pilot" WHERE "active") AS "activePilots",
+        (SELECT COUNT(*)::int FROM "Pilot" WHERE NOT "active") AS "inactivePilots",
+        (SELECT COUNT(*)::int FROM "Car") AS "registeredCars",
+        (SELECT COUNT(*)::int FROM "Car" WHERE "chipId" IS NOT NULL) AS "carChips",
+        (SELECT COUNT(*)::int FROM "Track") AS "trackCount",
+        (SELECT COUNT(*)::int FROM "Spec") AS "specCount",
+        (
+          SELECT COUNT(*)::int FROM "Race"
+          WHERE "raceDate" >= ${startOfYear}
+            AND "raceDate" < ${startOfNextYear}
+        ) AS "seasonRaces",
+        (
+          SELECT COUNT(*)::int FROM "Race"
+          WHERE "raceDate" >= ${startOfMonth}
+            AND "raceDate" < ${startOfNextMonth}
+        ) AS "monthRaces",
+        (
+          SELECT COUNT(*)::int FROM "Race"
+          WHERE "raceDate" >= ${now}
+        ) AS "upcomingRaces",
+        (
+          SELECT COUNT(*)::int FROM "Championship"
+          WHERE "startDate" <= ${now}
+            AND ("endDate" IS NULL OR "endDate" >= ${now})
+        ) AS "openChampionships",
+        (SELECT COALESCE(SUM("laps"), 0)::int FROM "RaceResult") AS "totalLaps",
+        (SELECT AVG("laps")::float FROM "RaceResult") AS "averageLaps"
     `,
     prisma.auditLog.findMany({
       orderBy: { createdAt: "desc" },
       take: 5,
     }),
   ]);
-
-  const seasonRaces = readCount(seasonRacesRows);
-  const monthRaces = readCount(monthRacesRows);
-  const upcomingRaces = readCount(upcomingRacesRows);
-  const openChampionships = readCount(openChampionshipsRows);
-  const carChips = readCount(carChipsRows);
-  const raceSummary = raceSummaryRows[0];
-  const totalLaps = readMetric(raceSummary?.totalLaps);
-  const averageLaps = Math.floor(raceSummary?.averageLaps ?? 0);
+  const stats = statsRows[0];
+  const activePilots = stats?.activePilots ?? 0;
+  const inactivePilots = stats?.inactivePilots ?? 0;
+  const registeredCars = stats?.registeredCars ?? 0;
+  const carChips = stats?.carChips ?? 0;
+  const trackCount = stats?.trackCount ?? 0;
+  const specCount = stats?.specCount ?? 0;
+  const seasonRaces = stats?.seasonRaces ?? 0;
+  const monthRaces = stats?.monthRaces ?? 0;
+  const upcomingRaces = stats?.upcomingRaces ?? 0;
+  const openChampionships = stats?.openChampionships ?? 0;
+  const totalLaps = readMetric(stats?.totalLaps);
+  const averageLaps = Math.floor(stats?.averageLaps ?? 0);
 
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900">

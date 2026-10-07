@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { AUTH_COOKIE_NAME } from "@/lib/authConstants";
 import { createJwtToken, verifyJwtToken } from "@/lib/jwt";
@@ -16,7 +17,7 @@ export async function verifyAuthToken(token: string) {
   return verifyJwtToken(token);
 }
 
-export async function getCurrentUser(): Promise<AuthUser | null> {
+export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
   const token = (await cookies()).get(AUTH_COOKIE_NAME)?.value;
   if (!token) return null;
 
@@ -46,7 +47,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     email: pilot.email,
     role: pilot.role,
   };
-}
+});
 
 export async function requireCurrentUser() {
   const user = await getCurrentUser();

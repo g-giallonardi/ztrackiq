@@ -5,7 +5,7 @@ import {
   DrawerCloseButton,
 } from "@/components/DismissibleDrawer";
 import { SubmitButton } from "@/components/SubmitButton";
-import { requireCurrentUser } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 import {
   buildDuplicateFirstnameSet,
   getPilotDisplayName,
@@ -19,7 +19,7 @@ import {
   Plus,
   Trophy,
 } from "lucide-react";
-import { deleteRace, saveRace } from "./actions";
+import { deleteRace, reorderRacesInSession, saveRace } from "./actions";
 import { RaceChampionshipFields } from "./RaceChampionshipFields";
 import { RaceResultsFields } from "./RaceResultsFields";
 import { RaceTeamResultsFields } from "./RaceTeamResultsFields";
@@ -30,6 +30,7 @@ type RaceRow = {
   name: string;
   mode: "solo" | "team";
   raceDate: Date;
+  sessionOrder: number;
   trackId: number | null;
   championshipId: number | null;
   championshipName: string | null;
@@ -114,6 +115,25 @@ function getRaceBestLap(results: { bestLapMs: number | null }[]) {
     .filter((bestLapMs): bestLapMs is number => bestLapMs !== null);
 
   return bestLaps.length > 0 ? Math.min(...bestLaps) : null;
+}
+
+function compareRaceResultsByPerformance(
+  a: Pick<RaceResultRow, "laps" | "bestLapMs" | "position">,
+  b: Pick<RaceResultRow, "laps" | "bestLapMs" | "position">,
+) {
+  const lapsDiff = (b.laps ?? -1) - (a.laps ?? -1);
+  if (lapsDiff !== 0) return lapsDiff;
+
+  const bestLapDiff =
+    (a.bestLapMs ?? Number.MAX_SAFE_INTEGER) -
+    (b.bestLapMs ?? Number.MAX_SAFE_INTEGER);
+  if (bestLapDiff !== 0) return bestLapDiff;
+
+  return a.position - b.position;
+}
+
+function sortRaceResultsByPerformance<T extends RaceResultRow>(results: T[]) {
+  return [...results].sort(compareRaceResultsByPerformance);
 }
 
 function getAverage(values: number[]) {
@@ -211,8 +231,8 @@ export default async function RacesPage({
     confirmDelete?: string;
   }>;
 }) {
-  const currentUser = await requireCurrentUser();
-  const canManage = currentUser.role === "admin";
+  const currentUser = await getCurrentUser();
+  const canManage = currentUser?.role === "admin";
 
   const params = await searchParams;
 
@@ -231,6 +251,7 @@ export default async function RacesPage({
         "Race"."name",
         "Race"."mode"::text AS "mode",
         "Race"."raceDate",
+        "Race"."sessionOrder",
         "Race"."trackId",
         "Race"."championshipId",
         "Championship"."name" AS "championshipName",
@@ -242,9 +263,16 @@ export default async function RacesPage({
       FROM "Race"
       LEFT JOIN "Track" ON "Track"."id" = "Race"."trackId"
       LEFT JOIN "Championship" ON "Championship"."id" = "Race"."championshipId"
-      ORDER BY "Race"."raceDate" DESC, "Race"."id" ASC
+      ORDER BY "Race"."raceDate" DESC, "Race"."sessionOrder" ASC, "Race"."id" ASC
     `,
     prisma.pilot.findMany({
+      select: {
+        id: true,
+        firstname: true,
+        lastname: true,
+        nickname: true,
+        active: true,
+      },
       orderBy: [{ lastname: "asc" }, { firstname: "asc" }],
     }),
     prisma.$queryRaw<TrackRow[]>`
@@ -258,11 +286,22 @@ export default async function RacesPage({
       ORDER BY "startDate" DESC, "createdAt" ASC
     `,
     prisma.car.findMany({
-      include: {
-        pilot: true,
+      select: {
+        id: true,
+        name: true,
+        pilotId: true,
+        pilot: {
+          select: {
+            firstname: true,
+            lastname: true,
+            nickname: true,
+          },
+        },
         specs: {
-          include: {
-            spec: true,
+          select: {
+            spec: {
+              select: { piValue: true },
+            },
           },
         },
       },
@@ -333,6 +372,7 @@ export default async function RacesPage({
     notes: race.notes,
     raceDate: formatRaceDateForInput(race.raceDate),
     raceDateLabel: formatRaceDate(race.raceDate),
+    sessionOrder: race.sessionOrder,
     trackId: race.trackId,
     trackName: race.trackName,
     championshipName: race.championshipName,
@@ -364,7 +404,11 @@ export default async function RacesPage({
   const sessionRaces = sessionDate
     ? races
         .filter((race) => formatRaceDateForInput(race.raceDate) === sessionDate)
-        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+        .sort(
+          (a, b) =>
+            a.sessionOrder - b.sessionOrder ||
+            a.id - b.id,
+        )
     : [];
 
   const isDrawerOpen = drawerMode === "add" || drawerMode === "edit";
@@ -419,7 +463,12 @@ export default async function RacesPage({
         />
       </div>
 
-      <RacesTable races={raceTableRows} tracks={tracks} canManage={canManage} />
+      <RacesTable
+        races={raceTableRows}
+        tracks={tracks}
+        canManage={canManage}
+        reorderRacesInSession={reorderRacesInSession}
+      />
 
       {canManage && isDrawerOpen && (
         <RaceDrawer
@@ -552,11 +601,12 @@ function RaceDrawer({
 }) {
   const isEdit = mode === "edit";
   const slotCount = Math.max(8, pilots.length, race?.results.length ?? 0);
+  const resultByPosition = new Map(
+    race?.results.map((result) => [result.position, result]) ?? [],
+  );
   const resultSlots = Array.from({ length: slotCount }, (_, index) => {
     const position = index + 1;
-    const result = race?.results.find(
-      (raceResult) => raceResult.position === position,
-    );
+    const result = resultByPosition.get(position);
 
     return {
       position,
@@ -574,9 +624,7 @@ function RaceDrawer({
   });
   const teamResultSlots = Array.from({ length: slotCount }, (_, index) => {
     const position = index + 1;
-    const result = race?.results.find(
-      (raceResult) => raceResult.position === position,
-    );
+    const result = resultByPosition.get(position);
 
     return {
       position,
@@ -828,6 +876,7 @@ function RaceSessionModal({
   membersByTeamId: Map<number, number[]>;
 }) {
   const sessionResults = races.flatMap((race) => race.results);
+  const sortedSessionResults = sortRaceResultsByPerformance(sessionResults);
   const sessionLaps = sessionResults
     .map((result) => result.laps)
     .filter((laps): laps is number => laps !== null);
@@ -840,7 +889,7 @@ function RaceSessionModal({
     highestLaps === null
       ? null
       : getResultDisplayName(
-          sessionResults.find((result) => result.laps === highestLaps) ?? {
+          sortedSessionResults.find((result) => result.laps === highestLaps) ?? {
             pilotId: null,
             teamId: null,
             teamName: null,
@@ -918,9 +967,7 @@ function RaceSessionModal({
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             {races.map((race) => {
-              const sortedResults = [...race.results].sort(
-                (a, b) => a.position - b.position,
-              );
+              const sortedResults = sortRaceResultsByPerformance(race.results);
               const raceBestLap = getRaceBestLap(sortedResults);
 
               return (
@@ -963,7 +1010,7 @@ function RaceSessionModal({
                   ) : (
                     <>
                       <div className="space-y-2 p-3 sm:hidden">
-                        {sortedResults.map((result) => {
+                        {sortedResults.map((result, index) => {
                           const car = getResultCar(
                             result,
                             carById,
@@ -977,7 +1024,7 @@ function RaceSessionModal({
                           return (
                             <ResultMobileCard
                               key={result.id}
-                              position={result.position}
+                              position={index + 1}
                               pilotName={getResultDisplayName(
                                 result,
                                 pilotsById,
@@ -1036,7 +1083,7 @@ function RaceSessionModal({
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-zinc-100">
-                          {sortedResults.map((result) => {
+                          {sortedResults.map((result, index) => {
                             const car = getResultCar(
                               result,
                               carById,
@@ -1053,7 +1100,7 @@ function RaceSessionModal({
                             return (
                               <tr key={result.id}>
                                 <td className="px-3 py-2 font-semibold text-zinc-900">
-                                  #{result.position}
+                                  #{index + 1}
                                 </td>
                                 <td className="px-3 py-2">
                                   {result.pilotId || result.teamId ? (
@@ -1304,9 +1351,7 @@ function RaceResultsModal({
   carByPilotId: Map<number, CarWithPiSpecs>;
   membersByTeamId: Map<number, number[]>;
 }) {
-  const sortedResults = [...race.results].sort(
-    (a, b) => a.position - b.position,
-  );
+  const sortedResults = sortRaceResultsByPerformance(race.results);
   const raceBestLap = getRaceBestLap(sortedResults);
 
   return (
@@ -1360,13 +1405,13 @@ function RaceResultsModal({
           ) : (
             <div className="overflow-hidden rounded-xl border border-zinc-200">
               <div className="space-y-2 bg-zinc-50 p-3 sm:hidden">
-                {sortedResults.map((result) => {
+                {sortedResults.map((result, index) => {
                   const car = getResultCar(result, carById, carByPilotId);
 
                   return (
                     <ResultMobileCard
                       key={result.id}
-                      position={result.position}
+                      position={index + 1}
                       pilotName={getResultDisplayName(
                         result,
                         pilotsById,
@@ -1422,7 +1467,7 @@ function RaceResultsModal({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100">
-                  {sortedResults.map((result) => {
+                  {sortedResults.map((result, index) => {
                     const car = getResultCar(result, carById, carByPilotId);
                     const isBestLap =
                       result.bestLapMs !== null && result.bestLapMs === raceBestLap;
@@ -1430,7 +1475,7 @@ function RaceResultsModal({
                     return (
                       <tr key={result.id}>
                         <td className="px-4 py-3 font-semibold text-zinc-900">
-                          #{result.position}
+                          #{index + 1}
                         </td>
                         <td className="px-4 py-3">
                           {result.pilotId || result.teamId ? (
