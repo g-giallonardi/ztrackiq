@@ -333,7 +333,7 @@ export function CarsTable({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col items-stretch gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 sm:flex-row sm:flex-wrap sm:items-end">
+      <div className="flex flex-col items-stretch gap-3 rounded-sm border border-zinc-200 bg-white p-3 sm:flex-row sm:flex-wrap sm:items-end">
         <label className="block sm:w-auto">
           <span className="mb-1.5 block text-sm font-semibold text-zinc-700">
             Recherche
@@ -366,7 +366,7 @@ export function CarsTable({
           return (
             <div
               key={row.id}
-              className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm"
+              className="rounded-sm border border-zinc-200 bg-white p-4"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -413,13 +413,13 @@ export function CarsTable({
         })}
 
         {table.getRowModel().rows.length === 0 && (
-          <div className="rounded-xl border border-zinc-200 bg-white px-5 py-10 text-center text-zinc-500">
+          <div className="rounded-md border border-zinc-200 bg-white px-5 py-10 text-center text-zinc-500">
             Aucune voiture ne correspond aux filtres.
           </div>
         )}
       </div>
 
-      <div className="hidden overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm md:block">
+      <div className="hidden overflow-hidden rounded-sm border border-zinc-200 bg-white md:block">
         <table className="w-full text-left text-sm">
           <thead className="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
             {table.getHeaderGroups().map((headerGroup) => (

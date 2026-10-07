@@ -779,7 +779,7 @@ function MyCarDrawer({
 function DeleteMyCarModal({ car }: { car: { id: number; name: string } }) {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+      <div className="w-full max-w-md rounded-md border border-zinc-200 bg-white p-6 shadow-lg">
         <p className="text-sm font-semibold uppercase tracking-wide text-red-500">
           Suppression
         </p>

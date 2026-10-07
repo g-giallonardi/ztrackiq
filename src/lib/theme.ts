@@ -1,9 +1,18 @@
 export const theme = {
   app: {
-    bg: "#09090f",
-    sidebar: "rgba(0,0,0,0.85)",
-    header: "rgba(0,0,0,0.9)",
-    overlay: "rgba(0,0,0,0.6)",
+    bg: "#18181b",
+    sidebar: "#18181b",
+    header: "rgba(24,24,27,0.96)",
+    overlay: "rgba(24,24,27,0.45)",
+  },
+
+  surface: {
+    canvas: "#f4f4f5",
+    panel: "#ffffff",
+    muted: "#fafafa",
+    line: "#e4e4e7",
+    ink: "#27272a",
+    subdued: "#71717a",
   },
 
   brand: {

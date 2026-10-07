@@ -31,10 +31,10 @@ export function UserMenu() {
     return (
       <Link
         href="/login"
-        className="mt-8 block rounded-xl border border-white/10 px-4 py-3 text-sm font-bold uppercase text-white transition"
+        className="mt-6 block rounded-md border border-white/10 px-3 py-2 text-sm font-semibold text-zinc-200 transition-colors"
         onMouseEnter={(event) => {
           event.currentTarget.style.borderColor = theme.brand.ztrack;
-          event.currentTarget.style.backgroundColor = theme.brand.ztrack;
+          event.currentTarget.style.backgroundColor = "rgba(255,255,255,0.08)";
         }}
         onMouseLeave={(event) => {
           event.currentTarget.style.borderColor = "";
@@ -47,7 +47,7 @@ export function UserMenu() {
   }
 
   return (
-    <div className="mt-8 rounded-xl border border-white/10 bg-white/5 p-4">
+    <div className="mt-6 rounded-md border border-white/10 bg-white/5 p-3">
       <p className="truncate text-sm font-black text-white">
         {getDisplayName(user)}
       </p>
@@ -61,7 +61,7 @@ export function UserMenu() {
           className="w-full rounded-md border border-white/10 px-3 py-2 text-xs font-bold uppercase text-white transition"
           onMouseEnter={(event) => {
             event.currentTarget.style.borderColor = theme.brand.ztrack;
-            event.currentTarget.style.backgroundColor = theme.brand.ztrack;
+            event.currentTarget.style.backgroundColor = "rgba(255,255,255,0.08)";
           }}
           onMouseLeave={(event) => {
             event.currentTarget.style.borderColor = "";

@@ -18,7 +18,7 @@ const navItems = [
 
 function Logo() {
   return (
-    <Link href="/" className="text-3xl font-black italic">
+    <Link href="/" className="text-2xl font-black italic tracking-tight">
       <span style={{ color: theme.brand.ztrack }}>ZTRACK</span>
       <span style={{ color: theme.brand.iq }}>IQ</span>
     </Link>
@@ -41,12 +41,14 @@ function NavItem({
     <Link
       href={href}
       onClick={onClick}
-      className="block rounded-xl px-4 py-3 font-bold uppercase text-white transition"
+      className="block rounded-md px-3 py-2 text-sm font-semibold text-zinc-200 transition-colors"
       style={{
-        backgroundColor: active ? theme.brand.ztrack : undefined,
+        backgroundColor: active ? "rgba(255,255,255,0.1)" : undefined,
+        color: active ? "#ffffff" : undefined,
+        borderLeft: active ? `2px solid ${theme.brand.ztrack}` : "2px solid transparent",
       }}
       onMouseEnter={(event) => {
-        if (!active) event.currentTarget.style.backgroundColor = theme.brand.ztrack;
+        if (!active) event.currentTarget.style.backgroundColor = "rgba(255,255,255,0.06)";
       }}
       onMouseLeave={(event) => {
         if (!active) event.currentTarget.style.backgroundColor = "";
@@ -59,7 +61,7 @@ function NavItem({
 
 function Navigation({ onNavigate }: { onNavigate?: () => void }) {
   return (
-    <nav className="mt-10 space-y-3">
+    <nav className="mt-8 space-y-1">
       {navItems.map((item) => (
         <NavItem
           key={item.href}
@@ -143,7 +145,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen lg:flex" onClickCapture={handleNavigationClick}>
       <aside
-        className="hidden w-72 shrink-0 border-r border-white/10 p-6 lg:block"
+        className="hidden w-64 shrink-0 border-r border-white/10 p-5 lg:block"
         style={{ backgroundColor: theme.app.sidebar }}
       >
         <Logo />
@@ -185,7 +187,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             aria-label="Fermer le menu"
           />
           <aside
-            className="relative h-full w-72 max-w-[85vw] overflow-y-auto border-r border-white/10 p-6"
+            className="relative h-full w-64 max-w-[85vw] overflow-y-auto border-r border-white/10 p-5"
             style={{ backgroundColor: theme.app.bg }}
           >
             <div className="flex items-center justify-between gap-4">
@@ -214,13 +216,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      <main className={`min-w-0 flex-1 bg-gradient-to-br ${theme.gradient.main}`}>
+      <main
+        className="min-w-0 flex-1"
+        style={{ backgroundColor: theme.surface.canvas }}
+      >
         {children}
       </main>
 
       {navigationPending && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-xl border border-white/10 bg-white p-5 text-center text-zinc-900 shadow-2xl">
+          <div className="w-full max-w-sm rounded-md border border-zinc-200 bg-white p-5 text-center text-zinc-900 shadow-lg">
             <div className="mx-auto mb-3 h-9 w-9 animate-spin rounded-full border-4 border-zinc-200 border-t-pink-500" />
             <p className="text-base font-black">Détail du pilote</p>
             <p className="mt-1 text-sm font-medium text-zinc-500">

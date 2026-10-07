@@ -12,7 +12,7 @@ type SubmitButtonProps = {
 export function SubmitButton({
   children,
   pendingLabel = "Enregistrement...",
-  className = "rounded-md bg-gradient-to-r from-pink-500 to-yellow-400 px-4 py-2 font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md disabled:cursor-wait disabled:opacity-75 disabled:hover:translate-y-0",
+  className = "rounded-md bg-zinc-900 px-4 py-2 font-semibold text-white transition-colors hover:bg-zinc-700 disabled:cursor-wait disabled:opacity-60",
 }: SubmitButtonProps) {
   const { pending } = useFormStatus();
 

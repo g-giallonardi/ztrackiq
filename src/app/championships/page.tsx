@@ -467,22 +467,22 @@ export default async function ChampionshipsPage({
   ).length;
 
   return (
-    <div className="m-2 rounded bg-white p-2 text-gray-900">
+    <div className="min-h-full p-4 text-zinc-900 sm:p-6">
       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
         <div>
-          <div className="my-2 flex flex-row gap-2 text-4xl sm:text-5xl">
-            <p className="rounded bg-purple-100 p-2 text-purple-600">
-              <Trophy size="30" />
+          <div className="my-1 flex flex-row items-center gap-2 text-2xl font-bold tracking-tight sm:text-3xl">
+            <p className="rounded-md bg-purple-50 p-2 text-purple-600">
+              <Trophy size="24" />
             </p>
-            <p className="self-end">Championnats</p>
+            <p>Championnats</p>
           </div>
-          <p>Classements calculés depuis les courses et leurs résultats.</p>
+          <p className="text-sm text-zinc-500">Classements calculés depuis les courses et leurs résultats.</p>
         </div>
 
         {canManage && (
           <Link
             href="/championships?drawer=add"
-            className="inline-flex h-fit w-full shrink-0 items-center justify-center gap-2 rounded-md bg-gradient-to-r from-pink-500 to-yellow-400 px-5 py-3 font-semibold text-white shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0 sm:w-auto"
+            className="inline-flex h-fit w-full shrink-0 items-center justify-center gap-2 rounded-md bg-zinc-900 px-5 py-3 font-semibold text-white transition-colors hover:bg-zinc-700 sm:w-auto"
           >
             <Plus />
             Ajouter un championnat
@@ -522,7 +522,7 @@ export default async function ChampionshipsPage({
           return (
             <section
               key={championship.id}
-              className="grid gap-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm lg:grid-cols-[minmax(260px,1fr)_minmax(320px,0.9fr)]"
+              className="grid gap-4 rounded-sm border border-zinc-200 bg-white p-4 lg:grid-cols-[minmax(260px,1fr)_minmax(320px,0.9fr)]"
             >
               <div className="flex min-w-0 items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -558,7 +558,7 @@ export default async function ChampionshipsPage({
         })}
 
         {championships.length === 0 && (
-          <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 p-10 text-center text-sm text-zinc-500">
+          <div className="rounded-md border border-dashed border-zinc-300 bg-zinc-50 p-10 text-center text-sm text-zinc-500">
             Aucun championnat créé.
           </div>
         )}
@@ -634,7 +634,7 @@ function QuickViewCard({
   label: string;
 }) {
   return (
-    <div className="group flex items-center gap-2 rounded-xl border border-zinc-200 bg-white p-3 shadow-sm transition-all hover:-translate-y-1 hover:border-pink-500 hover:shadow-lg sm:gap-4 sm:p-5">
+    <div className="flex items-center gap-3 rounded-sm border border-zinc-200 bg-white p-3 sm:p-4">
       <div
         className={`${color} ${bgColor} flex h-10 w-10 shrink-0 items-center justify-center rounded-md sm:h-14 sm:w-14`}
       >
@@ -723,7 +723,7 @@ function ChampionshipDetailsModal({
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
       <Link href="/championships" className="absolute inset-0" aria-label="Fermer" />
 
-      <div className="relative w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+      <div className="relative w-full max-w-5xl overflow-hidden rounded-md border border-zinc-200 bg-white shadow-lg">
         <div className="flex items-start justify-between gap-4 border-b border-zinc-100 p-6">
           <div>
             <p className="text-sm font-semibold uppercase tracking-wide text-purple-600">
@@ -1196,7 +1196,7 @@ function DeleteChampionshipModal({
 }) {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+      <div className="w-full max-w-md rounded-md border border-zinc-200 bg-white p-6 shadow-lg">
         <p className="text-sm font-semibold uppercase tracking-wide text-red-500">
           Suppression
         </p>

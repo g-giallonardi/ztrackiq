@@ -229,7 +229,8 @@ export default async function HomePage() {
           sizes="100vw"
           className="object-cover"
         />
-        <div className="relative flex min-h-56 flex-col justify-end gap-4 p-4 md:min-h-72 md:p-6">
+        <div className="absolute inset-0 bg-black/10" />
+        <div className="relative flex min-h-44 flex-col justify-end gap-4 p-4 md:min-h-56 md:p-6">
           <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
             <QuickAction href="/races" icon={<Flag size="17" />} label="Courses" />
             <QuickAction href="/me" icon={<Users size="17" />} label="Mon profil" />
@@ -258,7 +259,7 @@ export default async function HomePage() {
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
-          <section className="rounded-md border border-zinc-200 bg-white">
+          <section className="rounded-sm border border-zinc-200 bg-white">
             <div className="border-b border-zinc-100 px-4 py-3">
               <h2 className="text-sm font-black uppercase tracking-wide text-zinc-700">
                 Accès rapides
@@ -292,7 +293,7 @@ export default async function HomePage() {
             </div>
           </section>
 
-          <section className="rounded-md border border-zinc-200 bg-zinc-50 p-4">
+          <section className="rounded-sm border border-zinc-200 bg-zinc-50 p-4">
             <h2 className="text-sm font-black uppercase tracking-wide text-zinc-700">
               Résumé
             </h2>
@@ -317,7 +318,7 @@ export default async function HomePage() {
           </section>
         </div>
 
-        <section className="mt-4 rounded-md border border-zinc-200 bg-white">
+        <section className="mt-4 rounded-sm border border-zinc-200 bg-white">
           <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3">
             <h2 className="text-sm font-black uppercase tracking-wide text-zinc-700">
               Activités récentes

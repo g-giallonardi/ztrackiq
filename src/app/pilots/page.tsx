@@ -184,14 +184,14 @@ export default async function PilotsPage({
   const isDeleteModalOpen = drawerMode === "edit" && params?.confirmDelete === "1";
 
   return (
-    <div className="bg-white m-2 p-2 rounded text-gray-900">
+    <div className="min-h-full p-4 text-zinc-900 sm:p-6">
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
             <div>
-                <div className="flex flex-row gap-2 text-4xl sm:text-5xl my-2">
-                    <p className="text-pink-500 bg-pink-200 p-2 rounded"><Users size="30"/></p> 
-                    <p className="self-end ">Pilotes</p>
+                <div className="my-1 flex flex-row items-center gap-2 text-2xl font-bold tracking-tight sm:text-3xl">
+                    <p className="rounded-md bg-pink-50 p-2 text-pink-600"><Users size="24"/></p>
+                    <p>Pilotes</p>
                 </div>
-                <p>Gérer les pilotes inscrits</p>
+                <p className="text-sm text-zinc-500">Gérer les pilotes inscrits</p>
             </div>
             {canManage && (
               <Link
@@ -200,14 +200,10 @@ export default async function PilotsPage({
                     inline-flex items-center justify-center gap-2
                     h-fit w-full shrink-0 sm:w-auto
                     rounded-md
-                    bg-gradient-to-r from-pink-500 to-yellow-400
+                    bg-zinc-900
                     px-5 py-3
                     font-semibold text-white
-                    shadow-md
-                    transition-all
-                    hover:-translate-y-0.5
-                    hover:shadow-lg
-                    active:translate-y-0
+                    transition-colors hover:bg-zinc-700
                   "
                   >
                   <Plus />
@@ -345,7 +341,7 @@ function PilotDetailsModal({
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
       <Link href="/pilots" className="absolute inset-0" aria-label="Fermer" />
 
-      <div className="relative w-full max-w-6xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+      <div className="relative w-full max-w-6xl overflow-hidden rounded-md border border-zinc-200 bg-white shadow-lg">
         <div className="flex items-start justify-between gap-4 border-b border-zinc-100 p-5">
           <div>
             <p className="text-sm font-semibold uppercase tracking-wide text-pink-500">
@@ -570,7 +566,7 @@ function QuickViewCard({
   label: string;
 }) {
   return (
-    <div className="group flex items-center gap-2 rounded-xl border border-zinc-200 bg-white p-3 shadow-sm transition-all hover:-translate-y-1 hover:border-pink-500 hover:shadow-lg sm:gap-4 sm:p-5">
+    <div className="flex items-center gap-3 rounded-sm border border-zinc-200 bg-white p-3 sm:p-4">
       <div
         className={`${color} ${bgColor} flex h-10 w-10 shrink-0 items-center justify-center rounded-md sm:h-14 sm:w-14`}
       >
@@ -831,7 +827,7 @@ function DeletePilotModal({
 }) {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+      <div className="w-full max-w-md rounded-md border border-zinc-200 bg-white p-6 shadow-lg">
         <p className="text-sm font-semibold uppercase tracking-wide text-red-500">
           Suppression
         </p>

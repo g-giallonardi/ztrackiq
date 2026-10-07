@@ -11,7 +11,7 @@ export default async function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center p-6">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 text-zinc-900 shadow-2xl">
+      <div className="w-full max-w-md rounded-lg border border-zinc-200 bg-white p-6 text-zinc-900 shadow-lg">
         <div className="mb-6">
           <p className="text-sm font-semibold uppercase tracking-wide text-pink-500">
             ZTrackIQ
