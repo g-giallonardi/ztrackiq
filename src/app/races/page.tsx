@@ -11,7 +11,11 @@ import {
   getPilotDisplayName,
 } from "@/lib/pilotDisplay";
 import { prisma } from "@/lib/prisma";
-import { formatPiClass, getCarTotalPi } from "@/lib/racing";
+import {
+  formatPiClass,
+  getCarTotalPi,
+  sortRaceResultsByPosition,
+} from "@/lib/racing";
 import {
   CalendarDays,
   Clock,
@@ -115,25 +119,6 @@ function getRaceBestLap(results: { bestLapMs: number | null }[]) {
     .filter((bestLapMs): bestLapMs is number => bestLapMs !== null);
 
   return bestLaps.length > 0 ? Math.min(...bestLaps) : null;
-}
-
-function compareRaceResultsByPerformance(
-  a: Pick<RaceResultRow, "laps" | "bestLapMs" | "position">,
-  b: Pick<RaceResultRow, "laps" | "bestLapMs" | "position">,
-) {
-  const lapsDiff = (b.laps ?? -1) - (a.laps ?? -1);
-  if (lapsDiff !== 0) return lapsDiff;
-
-  const bestLapDiff =
-    (a.bestLapMs ?? Number.MAX_SAFE_INTEGER) -
-    (b.bestLapMs ?? Number.MAX_SAFE_INTEGER);
-  if (bestLapDiff !== 0) return bestLapDiff;
-
-  return a.position - b.position;
-}
-
-function sortRaceResultsByPerformance<T extends RaceResultRow>(results: T[]) {
-  return [...results].sort(compareRaceResultsByPerformance);
 }
 
 function getAverage(values: number[]) {
@@ -876,7 +861,7 @@ function RaceSessionModal({
   membersByTeamId: Map<number, number[]>;
 }) {
   const sessionResults = races.flatMap((race) => race.results);
-  const sortedSessionResults = sortRaceResultsByPerformance(sessionResults);
+  const sortedSessionResults = sortRaceResultsByPosition(sessionResults);
   const sessionLaps = sessionResults
     .map((result) => result.laps)
     .filter((laps): laps is number => laps !== null);
@@ -967,7 +952,7 @@ function RaceSessionModal({
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             {races.map((race) => {
-              const sortedResults = sortRaceResultsByPerformance(race.results);
+              const sortedResults = sortRaceResultsByPosition(race.results);
               const raceBestLap = getRaceBestLap(sortedResults);
 
               return (
@@ -1010,7 +995,7 @@ function RaceSessionModal({
                   ) : (
                     <>
                       <div className="space-y-2 p-3 sm:hidden">
-                        {sortedResults.map((result, index) => {
+                        {sortedResults.map((result) => {
                           const car = getResultCar(
                             result,
                             carById,
@@ -1024,7 +1009,7 @@ function RaceSessionModal({
                           return (
                             <ResultMobileCard
                               key={result.id}
-                              position={index + 1}
+                              position={result.position}
                               pilotName={getResultDisplayName(
                                 result,
                                 pilotsById,
@@ -1083,7 +1068,7 @@ function RaceSessionModal({
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-zinc-100">
-                          {sortedResults.map((result, index) => {
+                          {sortedResults.map((result) => {
                             const car = getResultCar(
                               result,
                               carById,
@@ -1100,7 +1085,7 @@ function RaceSessionModal({
                             return (
                               <tr key={result.id}>
                                 <td className="px-3 py-2 font-semibold text-zinc-900">
-                                  #{index + 1}
+                                  #{result.position}
                                 </td>
                                 <td className="px-3 py-2">
                                   {result.pilotId || result.teamId ? (
@@ -1351,7 +1336,7 @@ function RaceResultsModal({
   carByPilotId: Map<number, CarWithPiSpecs>;
   membersByTeamId: Map<number, number[]>;
 }) {
-  const sortedResults = sortRaceResultsByPerformance(race.results);
+  const sortedResults = sortRaceResultsByPosition(race.results);
   const raceBestLap = getRaceBestLap(sortedResults);
 
   return (
@@ -1405,13 +1390,13 @@ function RaceResultsModal({
           ) : (
             <div className="overflow-hidden rounded-xl border border-zinc-200">
               <div className="space-y-2 bg-zinc-50 p-3 sm:hidden">
-                {sortedResults.map((result, index) => {
+                {sortedResults.map((result) => {
                   const car = getResultCar(result, carById, carByPilotId);
 
                   return (
                     <ResultMobileCard
                       key={result.id}
-                      position={index + 1}
+                      position={result.position}
                       pilotName={getResultDisplayName(
                         result,
                         pilotsById,
@@ -1467,7 +1452,7 @@ function RaceResultsModal({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100">
-                  {sortedResults.map((result, index) => {
+                  {sortedResults.map((result) => {
                     const car = getResultCar(result, carById, carByPilotId);
                     const isBestLap =
                       result.bestLapMs !== null && result.bestLapMs === raceBestLap;
@@ -1475,7 +1460,7 @@ function RaceResultsModal({
                     return (
                       <tr key={result.id}>
                         <td className="px-4 py-3 font-semibold text-zinc-900">
-                          #{index + 1}
+                          #{result.position}
                         </td>
                         <td className="px-4 py-3">
                           {result.pilotId || result.teamId ? (

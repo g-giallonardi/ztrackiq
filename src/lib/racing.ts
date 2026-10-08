@@ -18,6 +18,12 @@ export function getCarTotalPi(car: { specs: { spec: { piValue: number } }[] }) {
   return car.specs.reduce((sum, carSpec) => sum + carSpec.spec.piValue, 0);
 }
 
+export function sortRaceResultsByPosition<T extends { position: number }>(
+  results: readonly T[],
+) {
+  return [...results].sort((a, b) => a.position - b.position);
+}
+
 export function parseBestLapMs(value: FormDataEntryValue | string | null) {
   const str = value?.toString().trim().replace(",", ".");
   if (!str) return null;

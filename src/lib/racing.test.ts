@@ -5,6 +5,7 @@ import {
   formatPiClass,
   getCarTotalPi,
   parseBestLapMs,
+  sortRaceResultsByPosition,
 } from "./racing";
 
 describe("racing helpers", () => {
@@ -34,6 +35,19 @@ describe("racing helpers", () => {
         ],
       }),
     ).toBe(190);
+  });
+
+  it("keeps the recorded ranking regardless of laps and lap times", () => {
+    const results = [
+      { position: 3, laps: 20, bestLapMs: 9_000 },
+      { position: 1, laps: 18, bestLapMs: 11_000 },
+      { position: 2, laps: 19, bestLapMs: 10_000 },
+    ];
+
+    expect(
+      sortRaceResultsByPosition(results).map((result) => result.position),
+    ).toEqual([1, 2, 3]);
+    expect(results.map((result) => result.position)).toEqual([3, 1, 2]);
   });
 
   it("parses lap times expressed as seconds or minutes", () => {
