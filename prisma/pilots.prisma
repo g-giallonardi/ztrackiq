@@ -1,6 +1,7 @@
 enum PilotRole {
   admin
   adherent
+  membre_honneur
   visiteur
 }
 

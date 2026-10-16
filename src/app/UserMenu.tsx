@@ -20,6 +20,8 @@ function formatRole(role: string) {
     ? "Admin"
     : role === "adherent"
       ? "Adhérent"
+      : role === "membre_honneur"
+        ? "★ Mb. d’honneur"
       : "Visiteur";
 }
 

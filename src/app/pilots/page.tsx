@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { deletePilot, savePilot } from "./actions";
 import { PilotEmailField } from "./PilotEmailField";
+import { PilotRoleField } from "./PilotRoleField";
 import { PilotsTable, type PilotTableRow } from "./PilotsTable";
 
 type PilotStats = {
@@ -84,6 +85,8 @@ function formatPilotRole(role: string | null | undefined) {
     ? "Admin"
     : role === "adherent"
       ? "Adhérent"
+      : role === "membre_honneur"
+        ? "★ Mb. d’honneur"
       : role === "visiteur"
         ? "Visiteur"
         : "Aucun rôle";
@@ -94,6 +97,8 @@ function getPilotRoleClassName(role: string | null | undefined) {
     ? "bg-purple-100 text-purple-700 ring-purple-600/20"
     : role === "adherent"
       ? "bg-cyan-100 text-cyan-700 ring-cyan-600/20"
+      : role === "membre_honneur"
+        ? "bg-amber-100 text-amber-800 ring-amber-600/20"
       : "bg-zinc-100 text-zinc-600 ring-zinc-500/20";
 }
 
@@ -250,6 +255,7 @@ export default async function PilotsPage({
           pilot={detailsPilot}
           details={detailsData}
           duplicateFirstnames={duplicateFirstnames}
+          canManage={canManage}
         />
       )}
     </div>
@@ -315,6 +321,7 @@ function PilotDetailsModal({
   pilot,
   details,
   duplicateFirstnames,
+  canManage,
 }: {
   pilot: {
     id: number;
@@ -330,6 +337,7 @@ function PilotDetailsModal({
   };
   details: PilotDetailsData;
   duplicateFirstnames: ReadonlySet<string>;
+  canManage: boolean;
 }) {
   const stats = details.stats;
   const races = readNumber(stats?.races);
@@ -357,12 +365,22 @@ function PilotDetailsModal({
             </p>
           </div>
 
-          <Link
-            href="/pilots"
-            className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-600 transition hover:border-pink-500 hover:text-pink-600"
-          >
-            Fermer
-          </Link>
+          <div className="flex items-center gap-2">
+            {canManage && (
+              <Link
+                href={`/pilots?drawer=edit&pilotId=${pilot.id}`}
+                className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-zinc-700"
+              >
+                Modifier
+              </Link>
+            )}
+            <Link
+              href="/pilots"
+              className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-600 transition hover:border-pink-500 hover:text-pink-600"
+            >
+              Fermer
+            </Link>
+          </div>
         </div>
 
         <div className="max-h-[78vh] overflow-y-auto p-5">
@@ -679,7 +697,6 @@ function PilotDrawer({
 
             <PilotEmailField
               defaultValue={pilot?.email ?? undefined}
-              defaultRole={pilot?.role}
               currentPilotId={pilot?.id}
               existingEmails={existingEmails}
             />
@@ -690,21 +707,7 @@ function PilotDrawer({
               defaultValue={pilot?.phone ?? undefined}
             />
 
-            <label className="block">
-              <span className="mb-1.5 block text-sm font-semibold text-zinc-700">
-                Rôle
-              </span>
-              <select
-                name="role"
-                defaultValue={pilot?.role ?? ""}
-                className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-zinc-900 outline-none transition focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20"
-              >
-                <option value="">Aucun rôle</option>
-                <option value="admin">Admin</option>
-                <option value="adherent">Adhérent</option>
-                <option value="visiteur">Visiteur</option>
-              </select>
-            </label>
+            <PilotRoleField defaultRole={pilot?.role} />
 
             <label className="block">
               <span className="mb-1.5 block text-sm font-semibold text-zinc-700">

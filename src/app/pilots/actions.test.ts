@@ -166,6 +166,118 @@ describe("pilot server actions", () => {
     expect(auditData.after).not.toHaveProperty("passwordHash");
   });
 
+  it("accepts the honorary member role for a pilot account", async () => {
+    mocks.pilotCreate.mockResolvedValue({
+      ...pilotSnapshot,
+      role: "membre_honneur",
+    });
+
+    await expect(
+      savePilot(pilotFormData({ role: "membre_honneur" })),
+    ).rejects.toThrow("NEXT_REDIRECT");
+
+    expect(mocks.pilotCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          role: "membre_honneur",
+          email: "alice@example.com",
+          passwordHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+        }),
+      }),
+    );
+  });
+
+  it("updates an existing pilot to honorary member", async () => {
+    mocks.pilotFindUnique.mockResolvedValue({
+      ...pilotSnapshot,
+      role: "adherent",
+      passwordHash: null,
+    });
+    mocks.pilotUpdate.mockResolvedValue({
+      ...pilotSnapshot,
+      role: "membre_honneur",
+    });
+
+    await expect(
+      savePilot(pilotFormData({ id: "7", role: "membre_honneur" })),
+    ).rejects.toThrow("NEXT_REDIRECT");
+
+    expect(mocks.pilotUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 7 },
+        data: expect.objectContaining({ role: "membre_honneur" }),
+      }),
+    );
+    expect(mocks.auditCreate.mock.calls[0][0].data.after.role).toBe(
+      "membre_honneur",
+    );
+  });
+
+  it("creates a pilot with a role and no email", async () => {
+    mocks.pilotCreate.mockResolvedValue({
+      ...pilotSnapshot,
+      email: null,
+    });
+
+    await expect(
+      savePilot(pilotFormData({ email: "   ", role: "adherent" })),
+    ).rejects.toThrow("NEXT_REDIRECT");
+
+    expect(mocks.pilotFindFirst).not.toHaveBeenCalled();
+    expect(mocks.pilotCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          email: null,
+          role: "adherent",
+          passwordHash: null,
+        }),
+      }),
+    );
+  });
+
+  it("keeps an optional email for a pilot without a role", async () => {
+    mocks.pilotCreate.mockResolvedValue({
+      ...pilotSnapshot,
+      role: null,
+    });
+
+    await expect(
+      savePilot(pilotFormData({ role: "" })),
+    ).rejects.toThrow("NEXT_REDIRECT");
+
+    expect(mocks.pilotCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          email: "alice@example.com",
+          role: null,
+          passwordHash: null,
+        }),
+      }),
+    );
+  });
+
+  it("updates a pilot without email without creating login credentials", async () => {
+    mocks.pilotFindUnique.mockResolvedValue({
+      ...pilotSnapshot,
+      email: null,
+      passwordHash: null,
+    });
+    mocks.pilotUpdate.mockResolvedValue({
+      ...pilotSnapshot,
+      email: null,
+    });
+
+    await expect(
+      savePilot(pilotFormData({ id: "7", email: "", role: "adherent" })),
+    ).rejects.toThrow("NEXT_REDIRECT");
+
+    expect(mocks.pilotUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ email: null, passwordHash: null }),
+      }),
+    );
+  });
+
   it("rejects an email already owned by another pilot", async () => {
     mocks.pilotFindFirst.mockResolvedValue({ id: 99 });
 

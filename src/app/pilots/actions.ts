@@ -3,7 +3,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
-import { PilotRole, type Prisma } from "@prisma/client";
+import type { PilotRole, Prisma } from "@prisma/client";
 import { requireAdmin } from "@/lib/auth";
 
 const DEFAULT_PASSWORD_HASH =
@@ -31,7 +31,7 @@ export async function savePilot(formData: FormData) {
   const lastname = optionalString(formData.get("lastname"));
   const nickname = emptyToNull(formData.get("nickname"));
   const role = optionalRole(formData.get("role"));
-  const email = role ? requiredString(formData.get("email")).toLowerCase() : null;
+  const email = emptyToNull(formData.get("email"))?.toLowerCase() ?? null;
   const phone = emptyToNull(formData.get("phone"));
   const clubId = toNullableNumber(formData.get("clubId"));
   const active = formData.get("active") === "on";
@@ -85,7 +85,9 @@ export async function savePilot(formData: FormData) {
         where: { id: pilotId },
         data: {
           ...data,
-          passwordHash: data.role ? passwordHash ?? DEFAULT_PASSWORD_HASH : null,
+          passwordHash: data.role
+            ? passwordHash ?? (data.email ? DEFAULT_PASSWORD_HASH : null)
+            : null,
         },
         select: PILOT_AUDIT_SELECT,
       });
@@ -103,7 +105,7 @@ export async function savePilot(formData: FormData) {
       const created = await tx.pilot.create({
         data: {
           ...data,
-          passwordHash: data.role ? DEFAULT_PASSWORD_HASH : null,
+          passwordHash: data.role && data.email ? DEFAULT_PASSWORD_HASH : null,
         },
         select: PILOT_AUDIT_SELECT,
       });
@@ -192,11 +194,16 @@ function optionalRole(value: FormDataEntryValue | null) {
     return null;
   }
 
-  if (role !== "admin" && role !== "adherent" && role !== "visiteur") {
+  if (
+    role !== "admin" &&
+    role !== "adherent" &&
+    role !== "membre_honneur" &&
+    role !== "visiteur"
+  ) {
     throw new Error("Rôle invalide");
   }
 
-  return PilotRole[role];
+  return role as PilotRole;
 }
 
 function toAuditJson(value: unknown): Prisma.InputJsonValue | undefined {

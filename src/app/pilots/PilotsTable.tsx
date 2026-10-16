@@ -78,6 +78,7 @@ function ColumnFilter({ column }: { column: Column<PilotTableRow, unknown> }) {
             <option value="none">Aucun rôle</option>
             <option value="admin">Admin</option>
             <option value="adherent">Adhérent</option>
+            <option value="membre_honneur">★ Mb. d’honneur</option>
             <option value="visiteur">Visiteur</option>
           </>
         )}
@@ -121,6 +122,8 @@ function RoleTag({ role, label }: { role: string; label: string }) {
       ? "bg-purple-100 text-purple-700 ring-purple-600/20"
       : role === "adherent"
         ? "bg-cyan-100 text-cyan-700 ring-cyan-600/20"
+        : role === "membre_honneur"
+          ? "bg-amber-100 text-amber-800 ring-amber-600/20"
         : "bg-zinc-100 text-zinc-600 ring-zinc-500/20";
 
   return (
