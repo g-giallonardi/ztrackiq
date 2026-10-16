@@ -152,7 +152,9 @@ export default async function PilotsPage({
 
   const activeCount = pilots.filter((p) => p.active).length;
   const inactiveCount = pilots.filter((p) => !p.active).length;
-  const adherentCount = pilots.filter((p) => p.role === "adherent").length;
+  const adherentCount = pilots.filter(
+    (p) => p.role === "adherent" || p.role === "admin",
+  ).length;
   const honoraryCount = pilots.filter((p) => p.role === "membre_honneur").length;
   const duplicateFirstnames = buildDuplicateFirstnameSet(pilots);
   const pilotTableRows: PilotTableRow[] = pilots.map((pilot) => {
