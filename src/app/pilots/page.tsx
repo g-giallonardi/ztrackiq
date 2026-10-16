@@ -152,6 +152,8 @@ export default async function PilotsPage({
 
   const activeCount = pilots.filter((p) => p.active).length;
   const inactiveCount = pilots.filter((p) => !p.active).length;
+  const adherentCount = pilots.filter((p) => p.role === "adherent").length;
+  const honoraryCount = pilots.filter((p) => p.role === "membre_honneur").length;
   const duplicateFirstnames = buildDuplicateFirstnameSet(pilots);
   const pilotTableRows: PilotTableRow[] = pilots.map((pilot) => {
     const fullName = getPilotFullName(pilot);
@@ -231,6 +233,20 @@ export default async function PilotsPage({
             bgColor='bg-gray-100'
             value={inactiveCount.toString()}
             label='Inactifs'
+        />
+        <QuickViewCard
+            icon={<Users />}
+            color='text-cyan-700'
+            bgColor='bg-cyan-100'
+            value={adherentCount.toString()}
+            label='Adhérents'
+        />
+        <QuickViewCard
+            icon={<Trophy />}
+            color='text-amber-800'
+            bgColor='bg-amber-100'
+            value={honoraryCount.toString()}
+            label='★ Mb. d’honneur'
         />
 
       </div>
